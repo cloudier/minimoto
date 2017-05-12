@@ -84,24 +84,26 @@ import subprocess
 GROUP_PREFIX = "au.unsw.edu.au.cs9243.2017.group12.test1"
 USER = "ubuntu"
 
-def start_instance(filename, keyfile, userdata=None):
+def start_instance(filename, keyfile, userdata):
     keyname = os.path.basename(keyfile)
     kwargs = {
         "ImageId": "ami-96666ff5",
         "KeyName": keyname,
-        "NetworkInterfaces": [{"AssociatePublicIpAddress": True}]
+        "NetworkInterfaces": [{"AssociatePublicIpAddress": True}],
+        "UserData": userdata # TODO install boto3
+        # TODO security group should not be default (else ssh blocked)
     }
-    if userdata:
-        kwargs["UserData"] = userdata
 
     new_instance = ec2.run_instances(**kwargs)
     new_instance.wait_until_running()
     new_instance_url = new_instance["Instances"][0]["PublicDnsName"]
 
+    # Upload script
     ADD_PROGRAM_STR = "scp -i {} {} {user}@{}:/home/{user}"
     add_program_cmd = ADD_PROGRAM_STR.format(
         keyfile, filename, new_instance_url, user=USER).split()
     subprocess.run(add_client_program_cmd)
+
     return new_instance
 
 def main():
@@ -143,16 +145,19 @@ def main():
     output_bucket = s3.Bucket(output_bucket_name)
 
     print("Starting EC2 client instance")
-    client_ec2 = start_instance("minimoto_client", keyfile)
+    client_ec2 = start_instance("minimoto_client", keyfile,
+                                # TODO default setup boto3
+                                "file://default_setup")
     client_url = client_ec2["Instances"][0]["PublicDnsName"]
 
     print("Starting EC2 watchdog instance")
-    watchdog_ec2 = start_instance("minimoto_watchdog", keyfile)
+    watchdog_ec2 = start_instance("minimoto_watchdog", keyfile,
+                                  "file://default_setup")
     watchdog_url = watchdog_ec2["Instances"][0]["PublicDnsName"]
 
     print("Starting EC2 service instance")
     service_ec2 = start_instance("minimoto_service", keyfile,
-                                 userdata="file://minimoto_service_setup")
+                                 "file://minimoto_service_setup")
 
     print("Creating AMI from EC2 service instance for watchdog")
     service_ami_name = GROUP_PREFIX + ".service.ami"
