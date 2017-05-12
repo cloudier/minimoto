@@ -72,89 +72,99 @@ SERVICE_AMI=...: the ID of the AMI used for service instances
 The setup program may print out other messages regarding its progress, it is up
 to you what those messages are.
 '''
+# TODO check failure
+# TODO check this scps to correct directory
+# TODO figure out what minimoto_cleanup neeeds to know and print to a file for minimoto_cleanup
 
 import os
 import sys
+import boto
 import json
 import subprocess
 
-keyfile = sys.argv[1]
-keyname = os.path.basename(keyfile)
-aws_access_key_id = sys.argv[2]
-aws_secret_access_key = sys.argv[3]
+# TODO before submit remove test
+GROUP_PREFIX = "au.unsw.edu.au.cs9243.2017.group12.test1"
+USER = "ubuntu"
 
-# Set up keys and region
-subprocess.run("aws configure set aws_access_key_id %s" % (aws_access_key_id))
-subprocess.run("aws configure set aws_secret_access_key %s" % (aws_secret_access_key))
-subprocess.run("aws configure set region ap-southeast-2")
+def start_instance(filename, keyfile, userdata=None):
+    keyname = os.path.basename(keyfile)
+    kwargs = {
+        ImageId="ami-96666ff5",
+        KeyName=keyname,
+        NetworkInterfaces=[{AssociatePublicIpAddress: True}]
+    }
+    if userdata:
+        kwargs["UserData"] = userdata
 
-# Create SQS queue
-queue_name = "sqsqueue"
-create_sqs_cmd = ("aws sqs create-queue --queue-name %s" % (queue_name)).split()
-sqs_info = json.loads(subprocess.check_output(create_sqs_cmd))
+    new_instance = ec2.run_instances(**kwargs)
+    new_instance.wait_until_running()
+    new_instance_url = new_instance["Instances"][0]["PublicDnsName"]
 
-# Create input S3 bucket
-input_bucket_name = "au.unsw.edu.au.cs9243.2017.group12.input"
-input_bucket_url = "s3://" + input_bucket_name + "/"
-create_input_s3_cmd = ("aws s3api create-bucket --bucket %s" % (bucket_name)).split()
-subprocess.run(create_input_s3_cmd)
+    ADD_PROGRAM_STR = "scp -i %s %s %s@%s"
+    add_program_cmd = (ADD_PROGRAM_STR %
+                       (keyfile, filename, USER, new_instance_url)).split()
+    subprocess.run(add_client_program_cmd)
+    return new_instance
 
-# Create output S3 bucket
-output_bucket_name = "au.unsw.edu.au.cs9243.2017.group12.output"
-output_bucket_url = "s3://" + output_bucket_name + "/"
-create_output_s3_cmd = ("aws s3api create-bucket --bucket %s" % (bucket_name)).split()
-subprocess.run(create_output_s3_cmd)
+def main():
+    keyfile = sys.argv[1]
+    aws_access_key_id = sys.argv[2]
+    aws_secret_access_key = sys.argv[3]
 
-# Start EC2 client instance
-# TODO This instance must contain the minimoto_client program and anything else required to run it (except the images used as input data).
-CREATE_CLIENT_EC2_STR = "aws ec2 run-instances \
-        --image-id ami-96666ff5 \
-        --key-name %s \
-        --associate-public-ip-address"
-create_client_ec2_cmd = (CREATE_CLIENT_EC2_STR % (keyname)).split()
-client_info = json.loads(subprocess.check_output(create_client_ec2_cmd))
-client_url = client_info["Instances"][0]["PublicDnsName"]
-client_user = "ubuntu"
+    print("Setting keys and region")
+    subprocess.run("aws configure set aws_access_key_id %s" % (aws_access_key_id))
+    subprocess.run("aws configure set aws_secret_access_key %s" % (aws_secret_access_key))
+    subprocess.run("aws configure set region ap-southeast-2")
 
-# Start EC2 watchdog instance
-# TODO This instance must contain the minimoto_watchdog program and anything else required to run it. Note that this instance should not automatically run the watchdog.
-CREATE_WATCHDOG_EC2_STR = "aws ec2 run-instances \
-        --image-id ami-96666ff5 \
-        --key-name %s \
-        --associate-public-ip-address"
-create_watchdog_ec2_cmd = (CREATE_WATCHDOG_EC2_STR % (keyname)).split()
-watchdog_info = json.loads(subprocess.check_output(create_watchdog_ec2_cmd))
-watchdog_url = watchdog_info["Instances"][0]["PublicDnsName"]
-watchdog_user = "ubuntu"
+    print("Get boto3 clients")
+    sqs = boto3.client("sqs")
+    s3 = boto3.client("s3")
+    ec2 = boto3.client("ec2")
 
-# Start transcoding service
-# TODO add minimoto_service file
-CREATE_SERVICE_EC2_STR = "aws ec2 run-instances \
-        --image-id ami-96666ff5 \
-        --key-name %s \
-        --associate-public-ip-address\
-        --user-data file://minimoto_service_setup"
-create_service_ec2_cmd = (CREATE_SERVICE_EC2_STR % (keyname)).split()
-service_info = json.loads(subprocess.check_output(create_service_ec2_cmd))
-service_url = service_info["Instances"][0]["PublicDnsName"]
-service_ami = service_info["Instances"][0]["ImageId"]
-service_user = "ubuntu"
+    print("Creating SQS queue")
+    queue_name = GROUP_PREFIX + ".queue"
+    try:
+        queue = sqs.create_queue(QueueName=queue_name)
+    except:
+        print("Queue name is not unique")
+        exit(1)
 
-#Create an AMI based on the EC2 service instance that the watchdog can use to launch new EC2 service instances.
+    print("Creating input S3 bucket")
+    input_bucket_name = GROUP_PREFIX + ".input"
+    input_bucket_url = "s3://" + input_bucket_name + "/"
+    input_bucket = s3.Bucket(input_bucket_name)
 
-# TODO wait for all instances to be running
+    print("Creating output S3 bucket")
+    output_bucket_name = GROUP_PREFIX + ".output"
+    output_bucket_url = "s3://" + output_bucket_name + "/"
+    output_bucket = s3.Bucket(output_bucket_name)
 
-# Print out info
-print("minimoto_setup: mandatory output messages follow:")
-print("S3_BUCKET_INPUT=%s" % (input_bucket_url))    # the S3 URL of the input bucket
-print("S3_BUCKET_OUTPUT=%s" % (output_bucket_url))  # the S3 URL of the output bucket
-print("CLIENT_USER=%s" % (client_user))             # the user name used to log in to the client EC2 instance
-print("CLIENT_ADDR=%s" % (client_url))              # the address of the client EC2 instance
-print("WATCHDOG_USER=%s" % (watchdog_user))         # the user name used to log in to the watchdog EC2 instance
-print("WATCHDOG_ADDR=%s" % (watchdog_url))          # the address of the watchdog EC2 instance
-print("SERVICE_USER=%s" % (service_user))           # the user name used to log in to a service EC2 instance
-print("SERVICE_AMI=%s" % (service_ami))             # the ID of the AMI used for service instances
+    print("Starting EC2 client instance")
+    client_ec2 = start_instance("minimoto_client", keyfile)
+    client_url = client_ec2["Instances"][0]["PublicDnsName"]
 
-# TODO print to a file for minimoto_cleanup
+    print("Starting EC2 watchdog instance")
+    watchdog_ec2 = start_instance("minimoto_watchdog", keyfile)
+    watchdog_url = watchdog_ec2["Instances"][0]["PublicDnsName"]
 
+    print("Starting EC2 service instance")
+    service_ec2 = start_instance("minimoto_service", keyfile,
+                                 userdata="file://minimoto_service_setup")
+
+    print("Creating AMI from EC2 service instance for watchdog")
+    service_ami_name = GROUP_PREFIX + ".service.ami"
+    service_ami = service_ec2.create_image(Name=service_ami_name)
+
+    print("minimoto_setup: mandatory output messages follow:")
+    print("S3_BUCKET_INPUT=%s" % (input_bucket_url))    # the S3 URL of the input bucket
+    print("S3_BUCKET_OUTPUT=%s" % (output_bucket_url))  # the S3 URL of the output bucket
+    print("CLIENT_USER=%s" % (USER))                    # the user name used to log in to the client EC2 instance
+    print("CLIENT_ADDR=%s" % (client_url))              # the address of the client EC2 instance
+    print("WATCHDOG_USER=%s" % (USER))                  # the user name used to log in to the watchdog EC2 instance
+    print("WATCHDOG_ADDR=%s" % (watchdog_url))          # the address of the watchdog EC2 instance
+    print("SERVICE_USER=%s" % (USER))                   # the user name used to log in to a service EC2 instance
+    print("SERVICE_AMI=%s" % (service_ami_name))        # the ID of the AMI used for service instances
+
+if __name__ == "__main__":
+    main()
 
