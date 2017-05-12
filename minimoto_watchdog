@@ -1,0 +1,42 @@
+#!/usr/bin/python
+
+'''
+There are no mandatory output messages. The watchdog program may print out other
+messages regarding its progress, it is up to you what those messages are.
+
+The watchdog service is executed occasionally (e.g., every couple of minutes)
+and adjusts the size of the service instance pool. The watchdog program does not
+run continuously. When executed it makes any adjustments of the service instance
+pool and then exits.
+
+The optional --status flag implements status monitoring of instances. When
+invoked with this flag minimoto_watchdog should list all running service
+instances, their status and utilisation, a summary of the overall system
+utilisation and queue length, and then exit. The output should look like the
+following:
+    instance: <instance-id> <status> <utilisation>
+    average utilisation: <average-utilisation>
+    queue length: <queue-length>
+Where there is an instance: line for each service instance (<instance-id> is an
+AWS instance ID (e.g., i-c6afc244), <status> is one of stopped or running, and
+<utilisation> is the CPU utilisation in percent (e.g. 50%)). The last two lines
+are summary lines, where <average-utilisation> is the average CPU utilisation of
+all service instances in percent, and <queue-length> is the (approximate) SQS
+queue length.
+
+The watchdog should only ever manage minimoto service instances. Make sure that
+it doesn’t monitor, stop or kill non-minimoto EC2 instances. Also make sure it
+does not kill the client or watchdog instances.
+
+Optional Features
+
+- To reduce the instance usage cost under a fluctuating workload, take into
+account billing cycles before terminating instances.
+- On scaling in, avoid terminating an instance that is processing a request.
+This helps avoid extra turnaround time for the request due to retries.
+'''
+
+import sys
+
+if sys.argv[1] == '--status':
+    pass

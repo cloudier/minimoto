@@ -1,0 +1,51 @@
+#!/usr/bin/python
+
+'''
+The following is a sample usage of the client command. Assume a collection of
+images are stored in ./sample_images and you have two S3 buckets:
+au.edu.unsw.cs9243.input and au.edu.unsw.cs9243.output. (Note that the bucket
+name is globally unique and you may not be able to create the buckets used in
+this example, so create your own unique bucket names.)
+
+    $ ./minimoto_client ./sample_images au.edu.unsw.cs9243.input au.edu.unsw.cs9243.output
+    You'll find the output in s3://au.edu.unsw.cs9243.output/xyz.mp4
+    $
+
+The client does the following:
+
+- Upload images in directory (e.g., ./sample_images) to the input S3 bucket
+(e.g., au.edu.unsw.cs9243.input).
+- After uploading all images, send a request (using an AWS Simple Queue Service
+(SQS) queue) to start a transcoding job.
+- Print a message containing the S3 URL of the video file that will be placed in
+the output S3 bucket (e.g., au.edu.unsw.cs9243.output) when the job is done.
+- If the optional --wait flag is given, then wait until transcoding has
+completed and the output video file is ready for collection. If no --wait flag
+is given, then exit without waiting; the user will find the output video file in
+the output S3 bucket once transcoding has completed.
+- Depending on the workload and the service capacity, uploaded images might not
+be processed immediately. So, make sure not to overwrite images that were
+previously uploaded. Adding a unique suffix to the directory name is one
+solution (e.g., upload files to au.edu.unsw.cs9243.input/sample_images_xyz and
+place the result in au.edu.unsw.cs9243.output/xyz.mp4 where xyz is a random
+string).
+
+The name of a video file can be arbitrary however it must be unique for each
+request.
+
+The output message specifying the S3 URL is mandatory. An S3 URL has the form
+s3://<S3 bucket name>/<file path>. The client program may print out other
+messages regarding its progress as well, it is up to you what those messages
+are.
+'''
+
+import sys
+
+images_dir = sys.argv[1]
+input_bucket_url = sys.argv[2]
+output_bucket_url = sys.argv[3]
+
+
+'''
+aws sqs send-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --message-body memes
+'''

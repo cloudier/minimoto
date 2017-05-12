@@ -1,0 +1,9 @@
+Client program adds to queue
+Service program 1 takes request from queue which reduces visibility for a time
+Service program 1 crashes
+Request is made visible again in the queue
+Service program 2 takes request from queue which reduces visibility for a time
+Request is made visible again in the queue <-- set the visibility timeout high enough to avoid this
+Service program 3 takes request from queue which reduces visibility for a time <-- because here, 2 service programs are transcoding the same request
+Service program 2 finishes and removes request from the queue
+Service program 3 finishes and tries removing request from the queue again
