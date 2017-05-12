@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 '''
 There are no mandatory output messages. The cleanup program may print out other
@@ -26,7 +26,7 @@ to cleanup a resource that doesn’t exist it should continue on to the next
 resource, rather than exit).
 '''
 
-import boto
+import boto3
 
 #- Delete the SQS queue.
 #- Delete the two S3 buckets.

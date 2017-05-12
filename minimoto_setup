@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 '''
 All the AWS resources (EC2 instances, SQS queue, S3 buckets, AMIs, security
@@ -100,13 +100,15 @@ def start_instance(filename, keyfile, userdata=None):
     new_instance.wait_until_running()
     new_instance_url = new_instance["Instances"][0]["PublicDnsName"]
 
-    ADD_PROGRAM_STR = "scp -i %s %s %s@%s"
-    add_program_cmd = (ADD_PROGRAM_STR %
-                       (keyfile, filename, USER, new_instance_url)).split()
+    ADD_PROGRAM_STR = "scp -i {} {} {user}@{}:/home/{user}"
+    add_program_cmd = ADD_PROGRAM_STR.format(keyfile, filename, new_instance_url, user=USER).split()
     subprocess.run(add_client_program_cmd)
     return new_instance
 
 def main():
+    if len(sys.argv) < 4:
+        print("Not enough arguments")
+        exit(1)
     keyfile = sys.argv[1]
     aws_access_key_id = sys.argv[2]
     aws_secret_access_key = sys.argv[3]
