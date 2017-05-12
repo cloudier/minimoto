@@ -73,13 +73,11 @@ The setup program may print out other messages regarding its progress, it is up
 to you what those messages are.
 '''
 # TODO check failure
-# TODO check this scps to correct directory
 # TODO figure out what minimoto_cleanup neeeds to know and print to a file for minimoto_cleanup
 
 import os
 import sys
-import boto
-import json
+import boto3
 import subprocess
 
 # TODO before submit remove test
@@ -89,9 +87,9 @@ USER = "ubuntu"
 def start_instance(filename, keyfile, userdata=None):
     keyname = os.path.basename(keyfile)
     kwargs = {
-        ImageId="ami-96666ff5",
-        KeyName=keyname,
-        NetworkInterfaces=[{AssociatePublicIpAddress: True}]
+        "ImageId": "ami-96666ff5",
+        "KeyName": keyname,
+        "NetworkInterfaces": [{"AssociatePublicIpAddress": True}]
     }
     if userdata:
         kwargs["UserData"] = userdata
