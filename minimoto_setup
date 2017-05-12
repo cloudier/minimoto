@@ -101,7 +101,8 @@ def start_instance(filename, keyfile, userdata=None):
     new_instance_url = new_instance["Instances"][0]["PublicDnsName"]
 
     ADD_PROGRAM_STR = "scp -i {} {} {user}@{}:/home/{user}"
-    add_program_cmd = ADD_PROGRAM_STR.format(keyfile, filename, new_instance_url, user=USER).split()
+    add_program_cmd = ADD_PROGRAM_STR.format(
+        keyfile, filename, new_instance_url, user=USER).split()
     subprocess.run(add_client_program_cmd)
     return new_instance
 
@@ -114,9 +115,11 @@ def main():
     aws_secret_access_key = sys.argv[3]
 
     print("Setting keys and region")
-    subprocess.run("aws configure set aws_access_key_id %s" % (aws_access_key_id))
-    subprocess.run("aws configure set aws_secret_access_key %s" % (aws_secret_access_key))
-    subprocess.run("aws configure set region ap-southeast-2")
+    subprocess.run("aws configure set aws_access_key_id {}"
+                   .format(aws_access_key_id).split())
+    subprocess.run("aws configure set aws_secret_access_key {}"
+                   .format(aws_secret_access_key).split())
+    subprocess.run("aws configure set region ap-southeast-2".split())
 
     print("Get boto3 clients")
     sqs = boto3.client("sqs")
@@ -158,14 +161,14 @@ def main():
     service_ami = service_ec2.create_image(Name=service_ami_name)
 
     print("minimoto_setup: mandatory output messages follow:")
-    print("S3_BUCKET_INPUT=%s" % (input_bucket_url))    # the S3 URL of the input bucket
-    print("S3_BUCKET_OUTPUT=%s" % (output_bucket_url))  # the S3 URL of the output bucket
-    print("CLIENT_USER=%s" % (USER))                    # the user name used to log in to the client EC2 instance
-    print("CLIENT_ADDR=%s" % (client_url))              # the address of the client EC2 instance
-    print("WATCHDOG_USER=%s" % (USER))                  # the user name used to log in to the watchdog EC2 instance
-    print("WATCHDOG_ADDR=%s" % (watchdog_url))          # the address of the watchdog EC2 instance
-    print("SERVICE_USER=%s" % (USER))                   # the user name used to log in to a service EC2 instance
-    print("SERVICE_AMI=%s" % (service_ami_name))        # the ID of the AMI used for service instances
+    print("S3_BUCKET_INPUT={}".format(input_bucket_url))    # the S3 URL of the input bucket
+    print("S3_BUCKET_OUTPUT={}".format(output_bucket_url))  # the S3 URL of the output bucket
+    print("CLIENT_USER={}".format(USER))                    # the user name used to log in to the client EC2 instance
+    print("CLIENT_ADDR={}".format(client_url))              # the address of the client EC2 instance
+    print("WATCHDOG_USER={}".format(USER))                  # the user name used to log in to the watchdog EC2 instance
+    print("WATCHDOG_ADDR={}".format(watchdog_url))          # the address of the watchdog EC2 instance
+    print("SERVICE_USER={}".format(USER))                   # the user name used to log in to a service EC2 instance
+    print("SERVICE_AMI={}".format(service_ami_name))        # the ID of the AMI used for service instances
 
 if __name__ == "__main__":
     main()
