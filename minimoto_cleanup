@@ -25,3 +25,11 @@ program should be robust in the face of failed commands (e.g. if it attempts
 to cleanup a resource that doesn’t exist it should continue on to the next
 resource, rather than exit).
 '''
+
+import boto
+
+#- Delete the SQS queue.
+#- Delete the two S3 buckets.
+#- Stop and terminate the client instance, the watchdog instance, and all service instances.
+#- Delete the service AMI.
+#- Delete any other resources created by the setup program or by the client, watchdog, or transcoding service.
