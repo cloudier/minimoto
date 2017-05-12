@@ -1,5 +1,78 @@
 #!/usr/bin/python
 
+'''
+All the AWS resources (EC2 instances, SQS queue, S3 buckets, AMIs, security
+groups, etc.) needed to run a solution will be created and initialised using a
+minimoto_setup program. The usage of the program is as follows (with sample
+output):
+    $ ./minimoto_setup keyfile aws_access_key_id aws_secret_access_key
+    minimoto_setup: mandatory output messages follow
+    S3_BUCKET_INPUT=s3://au.edu.unsw.cs9243.input
+    S3_BUCKET_OUTPUT=s3://au.edu.unsw.cs9243.output
+    CLIENT_USER=ubuntu
+    CLIENT_ADDR=ec2-52-63-140-157.ap-southeast-2.compute.amazonaws.com
+    WATCHDOG_USER=ubuntu
+    WATCHDOG_ADDR=ec2-52-62-39-219.ap-southeast-2.compute.amazonaws.com
+    SERVICE_USER=ubuntu
+    SERVICE_AMI=ami-fae5c999
+    $
+
+The command-line arguments are:
+
+keyfile: the full path to a .pem key file that will be used to access instances
+over ssh. The file name will consist of the key name with the .pem extension, so
+you can extract the key name from the file name.
+aws_access_key_id: the AWS access key ID that is used as AWS credentials.
+aws_secret_access_key: the AWS secret access key that is used as AWS
+credentials.
+
+The setup program must:
+
+- Create an SQS queue.
+- Create two S3 buckets: one for input, one for output.
+- Launch and configure an EC2 client instance from which minimoto_client can be
+run. This instance must contain the minimoto_client program and anything else
+required to run it (except the images used as input data).
+- Launch and configure an EC2 watchdog instance from which minimoto_watchdog can
+be run. This instance must contain the minimoto_watchdog program and anything
+else required to run it. Note that this instance should not automatically run
+the watchdog.
+- Launch and configure an EC2 service instance which will regularly run the
+transcoding service. This instance must contain everything required to run the
+transcoding service, and be configured to run the transcoding service regularly.
+- Create an AMI based on the EC2 service instance that the watchdog can use to
+launch new EC2 service instances.
+- Create and configure any other resources needed to run the client, watchdog,
+and transcoding service.
+
+Some further notes:
+
+- All the EC2 instances must allow ssh access to them using the given keyfile.
+- Use the ap-southeast-2 AWS region, i.e., create all resources and run all
+instances in this region. Do not use other regions.
+- Since the setup program must perform a lot of work, the program may take a
+long time to run. However, if it takes more than 10 minutes, please note this
+and explain the reasons in your DESIGN doc.
+
+minimoto_setup will have to pass information on to minimoto_cleanup about what
+resources were created. One way to do this is using a shared file (that
+minimoto_setup writes to and minimoto_cleanup reads from).
+
+The mandatory output messages are as follows:
+
+S3_BUCKET_INPUT=... : the S3 URL of the input bucket
+S3_BUCKET_OUTPUT=... : the S3 URL of the output bucket
+CLIENT_USER=... : the user name used to log in to the client EC2 instance
+CLIENT_ADDR=... : the address of the client EC2 instance
+WATCHDOG_USER=... : the user name used to log in to the watchdog EC2 instance
+WATCHDOG_ADDR=... : the address of the watchdog EC2 instance
+SERVICE_USER=...: the user name used to log in to a service EC2 instance
+SERVICE_AMI=...: the ID of the AMI used for service instances
+
+The setup program may print out other messages regarding its progress, it is up
+to you what those messages are.
+'''
+
 import sys
 import subprocess
 
@@ -23,5 +96,3 @@ subprocess.run("aws s3api create-bucket ")
 
 
 # Print out results
-
-
