@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-'''
+"""
 All the AWS resources (EC2 instances, SQS queue, S3 buckets, AMIs, security
 groups, etc.) needed to run a solution will be created and initialised using a
 minimoto_setup program. The usage of the program is as follows (with sample
@@ -71,40 +71,46 @@ SERVICE_AMI=...: the ID of the AMI used for service instances
 
 The setup program may print out other messages regarding its progress, it is up
 to you what those messages are.
-'''
+"""
+
 # TODO check failure
 # TODO figure out what minimoto_cleanup neeeds to know and print to a file for minimoto_cleanup
 
 import os
 import sys
 import boto3
+import base64
 import subprocess
 
-# TODO before submit remove test
-GROUP_PREFIX = "au.unsw.edu.au.cs9243.2017.group12.test1"
-USER = "ubuntu"
+from minimoto_constants import *
 
-def start_instance(filename, keyfile, userdata):
-    keyname = os.path.basename(keyfile)
-    kwargs = {
-        "ImageId": "ami-96666ff5",
-        "KeyName": keyname,
-        "NetworkInterfaces": [{"AssociatePublicIpAddress": True}],
-        "UserData": userdata # TODO install boto3
-        # TODO security group should not be default (else ssh blocked)
-    }
 
-    new_instance = ec2.run_instances(**kwargs)
-    new_instance.wait_until_running()
-    new_instance_url = new_instance["Instances"][0]["PublicDnsName"]
+def start_instance(ec2, filename, keyname, userdata):
+    with open(userdata, "r") as userdatafile:
+        instances = ec2.create_instances(
+            ImageId="ami-96666ff5",
+            MinCount=1,
+            MaxCount=1,
+            InstanceType="t2.small",
+            KeyName=keyname,
+            SecurityGroups=[SECURITY_GROUP_NAME],
+            UserData=userdatafile.read()
+        )
+    return instances[0]
 
-    # Upload script
-    ADD_PROGRAM_STR = "scp -i {} {} {user}@{}:/home/{user}"
-    add_program_cmd = ADD_PROGRAM_STR.format(
-        keyfile, filename, new_instance_url, user=USER).split()
-    subprocess.run(add_client_program_cmd)
 
-    return new_instance
+def setup_instance(instance, files, keyfile):
+    instance.reload()
+    instance_url = instance.public_dns_name
+
+    # Upload necessary files
+    for filename in files:
+        print("Uploading " + filename)
+
+        subprocess.check_call(["scp", "-o", "StrictHostKeyChecking no", "-i",
+                               keyfile, filename,
+                               "%s@%s:/home/%s/" % (USER, instance_url, USER)])
+
 
 def main():
     if len(sys.argv) < 4:
@@ -115,53 +121,129 @@ def main():
     aws_secret_access_key = sys.argv[3]
 
     print("Setting keys and region")
-    subprocess.run("aws configure set aws_access_key_id {}"
-                   .format(aws_access_key_id).split())
-    subprocess.run("aws configure set aws_secret_access_key {}"
-                   .format(aws_secret_access_key).split())
-    subprocess.run("aws configure set region ap-southeast-2".split())
+    subprocess.run(["aws", "configure", "set", "aws_access_key_id",
+                    aws_access_key_id])
+    subprocess.run(["aws", "configure", "set", "aws_secret_access_key",
+                    aws_secret_access_key])
+    subprocess.run(["aws", "configure", "set", "region", "ap-southeast-2"])
 
     print("Get boto3 clients")
-    sqs = boto3.client("sqs")
-    s3 = boto3.client("s3")
-    ec2 = boto3.client("ec2")
+    sqs = boto3.resource("sqs")
+    s3 = boto3.resource("s3")
+    ec2 = boto3.resource("ec2")
 
     print("Creating SQS queue")
-    queue_name = GROUP_PREFIX + ".queue"
-    try:
-        queue = sqs.create_queue(QueueName=queue_name)
-    except:
-        print("Queue name is not unique")
-        exit(1)
+    sqs.create_queue(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME,
+                     Attributes={"VisibilityTimeout": "30"})
 
     print("Creating input S3 bucket")
-    input_bucket_name = GROUP_PREFIX + ".input"
-    input_bucket_url = "s3://" + input_bucket_name + "/"
-    input_bucket = s3.Bucket(input_bucket_name)
+    try:
+        s3.create_bucket(Bucket=INPUT_BUCKET_NAME,
+                         CreateBucketConfiguration={
+                            "LocationConstraint": "ap-southeast-2"
+                         })
+    except boto3.exceptions.botocore.errorfactory.ClientError as e:
+        if e.response["Error"]["Code"] == "BucketAlreadyOwnedByYou":
+            print("Bucket already exists")
+        else:
+            raise
+    input_bucket_url = "s3://" + INPUT_BUCKET_NAME
 
     print("Creating output S3 bucket")
-    output_bucket_name = GROUP_PREFIX + ".output"
-    output_bucket_url = "s3://" + output_bucket_name + "/"
-    output_bucket = s3.Bucket(output_bucket_name)
+    try:
+        s3.create_bucket(Bucket=OUTPUT_BUCKET_NAME,
+                         CreateBucketConfiguration={
+                            "LocationConstraint": "ap-southeast-2"
+                         })
+    except boto3.exceptions.botocore.errorfactory.ClientError as e:
+        if e.response["Error"]["Code"] == "BucketAlreadyOwnedByYou":
+            print("Bucket already exists")
+        else:
+            raise
+    output_bucket_url = "s3://" + OUTPUT_BUCKET_NAME
+
+    print("Importing the key pair")
+    keyname = os.path.basename(keyfile)[:-4]
+    material = subprocess.check_output(["ssh-keygen", "-y", "-f", keyfile])
+    try:
+        ec2.import_key_pair(
+            KeyName=keyname,
+            PublicKeyMaterial=material
+        )
+    except boto3.exceptions.botocore.errorfactory.ClientError as e:
+        if e.response["Error"]["Code"] == "InvalidKeyPair.Duplicate":
+            print("Key pair already exists")
+        else:
+            raise
+
+    print("Creating a security group that allows ssh access")
+    try:
+        security_group = ec2.create_security_group(
+            GroupName=SECURITY_GROUP_NAME,
+            Description="ssh access"
+        )
+
+        security_group.authorize_ingress(
+            IpProtocol="TCP",
+            FromPort=22,
+            ToPort=22,
+            CidrIp='0.0.0.0/0'
+        )
+    except boto3.exceptions.botocore.errorfactory.ClientError as e:
+        if e.response["Error"]["Code"] == "InvalidGroup.Duplicate":
+            print("Security group already exists")
+        else:
+            raise
 
     print("Starting EC2 client instance")
-    client_ec2 = start_instance("minimoto_client", keyfile,
-                                # TODO default setup boto3
-                                "file://default_setup")
-    client_url = client_ec2["Instances"][0]["PublicDnsName"]
+    client_instance = start_instance(ec2, "minimoto_client", keyname,
+                                     "minimoto_default_userdata")
 
     print("Starting EC2 watchdog instance")
-    watchdog_ec2 = start_instance("minimoto_watchdog", keyfile,
-                                  "file://default_setup")
-    watchdog_url = watchdog_ec2["Instances"][0]["PublicDnsName"]
+    watchdog_instance = start_instance(ec2, "minimoto_watchdog", keyname,
+                                       "minimoto_default_userdata")
 
     print("Starting EC2 service instance")
-    service_ec2 = start_instance("minimoto_service", keyfile,
-                                 "file://minimoto_service_setup")
+    service_instance = start_instance(ec2, "minimoto_service", keyname,
+                                      "minimoto_service_userdata")
+
+    print("Waiting until instances OK")
+    # This should wait until the init script for all instances has finished
+    waiter = boto3.client('ec2').get_waiter("instance_status_ok")
+    waiter.wait(InstanceIds=[
+        client_instance.id,
+        watchdog_instance.id,
+        service_instance.id,
+    ])
+
+    print("Setting up EC2 client instance")
+    setup_instance(client_instance,
+                   ["minimoto_client", "minimoto_constants.py"],
+                   keyfile)
+    client_url = client_instance.public_dns_name
+
+    print("Setting up EC2 watchdog instance")
+    setup_instance(watchdog_instance,
+                   ["minimoto_watchdog", "minimoto_constants.py"],
+                   keyfile)
+    watchdog_url = watchdog_instance.public_dns_name
+
+    print("Setting up EC2 service instance")
+    setup_instance(service_instance,
+                   ["minimoto_service", "img2video", "minimoto_constants.py"],
+                   keyfile)
 
     print("Creating AMI from EC2 service instance for watchdog")
-    service_ami_name = GROUP_PREFIX + ".service.ami"
-    service_ami = service_ec2.create_image(Name=service_ami_name)
+    service_ami = service_instance.create_image(Name=SERVICE_AMI_NAME)
+    service_ami.wait_until_exists(Filters=[
+        {
+            "Name": "state",
+            "Values": [
+                "available",
+            ]
+        },
+    ])
+    waiter.wait(InstanceIds=[service_instance.id])
 
     print("minimoto_setup: mandatory output messages follow:")
     print("S3_BUCKET_INPUT={}".format(input_bucket_url))    # the S3 URL of the input bucket
@@ -171,8 +253,8 @@ def main():
     print("WATCHDOG_USER={}".format(USER))                  # the user name used to log in to the watchdog EC2 instance
     print("WATCHDOG_ADDR={}".format(watchdog_url))          # the address of the watchdog EC2 instance
     print("SERVICE_USER={}".format(USER))                   # the user name used to log in to a service EC2 instance
-    print("SERVICE_AMI={}".format(service_ami_name))        # the ID of the AMI used for service instances
+    print("SERVICE_AMI={}".format(service_ami.id))          # the ID of the AMI used for service instances
+
 
 if __name__ == "__main__":
     main()
-

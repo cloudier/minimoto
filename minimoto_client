@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-'''
+"""
 The following is a sample usage of the client command. Assume a collection of
 images are stored in ./sample_images and you have two S3 buckets:
 au.edu.unsw.cs9243.input and au.edu.unsw.cs9243.output. (Note that the bucket
@@ -37,7 +37,7 @@ The output message specifying the S3 URL is mandatory. An S3 URL has the form
 s3://<S3 bucket name>/<file path>. The client program may print out other
 messages regarding its progress as well, it is up to you what those messages
 are.
-'''
+"""
 
 import sys
 

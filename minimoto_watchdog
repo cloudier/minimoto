@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-'''
+"""
 There are no mandatory output messages. The watchdog program may print out other
 messages regarding its progress, it is up to you what those messages are.
 
@@ -34,9 +34,9 @@ Optional Features
 account billing cycles before terminating instances.
 - On scaling in, avoid terminating an instance that is processing a request.
 This helps avoid extra turnaround time for the request due to retries.
-'''
+"""
 
 import sys
 
-if sys.argv[1] == '--status':
+if sys.argv[1] == "--status":
     pass

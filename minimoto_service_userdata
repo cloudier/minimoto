@@ -1,0 +1,6 @@
+#!/bin/bash
+apt-get update
+apt install -y python3-pip imagemagick libav-tools
+pip3 install --upgrade pip
+pip3 install boto3
+echo '* * * * * /usr/bin/python3 /home/ubuntu/minimoto_service >> /home/ubuntu/minimoto.log 2>&1' | crontab

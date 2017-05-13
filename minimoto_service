@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-'''
+"""
 The transcoding service layer is a pool of AWS EC2 instances, which we call
 service instances. Each service instance is launched from the same Amazon
 Machine Image (AMI), which you will have created as part of setup and which
@@ -37,9 +37,10 @@ success or failure of the run, any arguments received, and any other interesting
 output that could help diagnose and fix problems. Note that there should be one
 log file per service instance. All transcoding processes running on the same
 service instance must write (append) to the same log file.
-'''
+"""
 
-
+print("minimoto service starting")
+print("minimoto service finished")
 
 '''
 aws sqs delete-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --receipt-handle "AQEByQUiYpTQHNjt5oo3keRpJDp49dUZZtSCaHT8jNxk7pT0QuN8H5KgV13lI5ThBs+hcOBVxNj+GNLYJNa1OTr6Id048+l718hM8lCA421hFf8f9aJCNeUl4EkGE++pbAwiuNRyGJBX1P57MoC4q2wfuhHWn6cKSNUtQUy/kPdwKl3LTTnS+Xn2EzWPpN+0gdu/vDy6DKdUiCEwEBsp/nLzj6cHJbTEtq+6ScvJ5Zs/5as70fZiGF2GEF4srHnr8y5HhwwRtKZZcKp+6rYg0yCpWN220oakfqkjiY3vcAdqRMhp1Y/UXl04PajJcl3nBlXB8rYhdiouv+kVCFzkR3e73FXL7qJ68YWtKNmVcns4RpDb03IGV13jaC8y3utDrp6s2OhzwkbPHfaOORclTNTonQ=="
