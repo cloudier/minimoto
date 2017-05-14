@@ -79,7 +79,6 @@ to you what those messages are.
 import os
 import sys
 import boto3
-import base64
 import subprocess
 
 from minimoto_constants import *
@@ -112,6 +111,12 @@ def setup_instance(instance, files, keyfile):
                                "%s@%s:/home/%s/" % (USER, instance_url, USER)])
 
 
+'''
+Things to store:
+    sqs QueueUrl
+    instance id for client, watchdog, first instance
+    imageId
+'''
 def main():
     if len(sys.argv) < 4:
         print("Not enough arguments")
@@ -258,3 +263,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

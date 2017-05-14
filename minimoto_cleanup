@@ -27,9 +27,69 @@ resource, rather than exit).
 '''
 
 import boto3
+import pickle
 
-#- Delete the SQS queue.
-#- Delete the two S3 buckets.
-#- Stop and terminate the client instance, the watchdog instance, and all service instances.
-#- Delete the service AMI.
-#- Delete any other resources created by the setup program or by the client, watchdog, or transcoding service.
+from contextlib import suppress
+from minimoto_constants import *
+
+
+def deleteBucket(bucketname):
+    with suppress(Exception):
+        bucket = s3.Bucket(bucket_name)
+        bucket.objects.all().delete()
+        bucket.delete()
+
+def terminateInstance(InstanceId):
+    with suppress(Exception):
+        ec2.terminate_instances(InstanceIds=[InstanceId])
+
+
+def main():
+    print("Load pickle file")
+    with open(MINIMOTO_PICKLE_FILE, "rb") as pickle_handle:
+        minimoto_info = pickle.load(pickle_handle)
+
+        print("Get boto3 resources")
+        sqs = boto3.resource("sqs")
+        s3 = boto3.resource("s3")
+        ec2 = boto3.client("ec2")
+
+        print("Deleting SQS queue")
+        with suppress(Exception):
+            sqs.delete_queue(QueueUrl=minimoto_info.queue_url)
+
+        print("Deleting S3 input bucket")
+        deleteBucket(INPUT_BUCKET_NAME)
+
+        print("Deleting S3 output bucket")
+        deleteBucket(OUTPUT_BUCKET_NAME)
+
+        print("Terminating client instance")
+        terminateInstance(minimoto_info.client_instance_id)
+
+        print("Terminating watchdog instance")
+        terminateInstance(minimoto_info.watchdog_instance_id)
+
+        print("Terminating original service instance")
+        terminateInstance(minimoto_info.service_instance_id)
+
+        print("Terminating new service instances")
+        with suppress(Exception):
+            service_instances = ec2.describe_instances(
+                Filters=[{"image-id": minimoto_info.image_id}])
+            for reservation in service_instances["Reservations"]:
+                for instance in reservation["Instances"]:
+                    terminateInstance(instance["InstanceId"])
+
+        print("Deregistering service AMI and deleting snapshot")
+        with suppress(Exception):
+            response = ec2.describe_images(ImageIds=[minimoto_info.image_id])
+            image = response["Images"][0]
+            snapshotId = image["BlockDeviceMappings"][0]["Ebs"]["SnapshotId"]
+            ec2.deregister_image(ImageId=minimoto_info.image_id)
+            ec2.delete_snapshot(snapshotId)
+
+
+if __name__ == "__main__":
+    main()
+

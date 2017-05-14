@@ -8,3 +8,5 @@ INPUT_BUCKET_NAME = INVERSE_GROUP_DOMAIN + ".input"
 OUTPUT_BUCKET_NAME = INVERSE_GROUP_DOMAIN + ".output"
 SERVICE_AMI_NAME = INVERSE_GROUP_DOMAIN + ".service.ami"
 SECURITY_GROUP_NAME = "group12-ssh-security-group"
+MINIMOTO_PICKLE_FILE = "minimoto_info.pickle"
+
