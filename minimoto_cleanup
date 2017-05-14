@@ -56,7 +56,7 @@ def main():
 
         print("Deleting SQS queue")
         with suppress(Exception):
-            sqs.delete_queue(QueueUrl=minimoto_info.queue_url)
+            sqs.delete_queue(QueueUrl=minimoto_info["queue_url"])
 
         print("Deleting S3 input bucket")
         deleteBucket(INPUT_BUCKET_NAME)
@@ -65,28 +65,28 @@ def main():
         deleteBucket(OUTPUT_BUCKET_NAME)
 
         print("Terminating client instance")
-        terminateInstance(minimoto_info.client_instance_id)
+        terminateInstance(minimoto_info["client_instance_id"])
 
         print("Terminating watchdog instance")
-        terminateInstance(minimoto_info.watchdog_instance_id)
+        terminateInstance(minimoto_info["watchdog_instance_id"])
 
         print("Terminating original service instance")
-        terminateInstance(minimoto_info.service_instance_id)
+        terminateInstance(minimoto_info["service_instance_id"])
 
         print("Terminating new service instances")
         with suppress(Exception):
             service_instances = ec2.describe_instances(
-                Filters=[{"image-id": minimoto_info.image_id}])
+                Filters=[{"image-id": minimoto_info["image_id"]}])
             for reservation in service_instances["Reservations"]:
                 for instance in reservation["Instances"]:
                     terminateInstance(instance["InstanceId"])
 
         print("Deregistering service AMI and deleting snapshot")
         with suppress(Exception):
-            response = ec2.describe_images(ImageIds=[minimoto_info.image_id])
+            response = ec2.describe_images(ImageIds=[minimoto_info["image_id"]])
             image = response["Images"][0]
             snapshotId = image["BlockDeviceMappings"][0]["Ebs"]["SnapshotId"]
-            ec2.deregister_image(ImageId=minimoto_info.image_id)
+            ec2.deregister_image(ImageId=minimoto_info["image_id"])
             ec2.delete_snapshot(snapshotId)
 
 
