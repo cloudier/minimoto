@@ -79,6 +79,7 @@ to you what those messages are.
 import os
 import sys
 import boto3
+import pickle
 import subprocess
 
 from minimoto_constants import *
@@ -111,12 +112,11 @@ def setup_instance(instance, files, keyfile):
                                "%s@%s:/home/%s/" % (USER, instance_url, USER)])
 
 
-'''
-Things to store:
-    sqs QueueUrl
-    instance id for client, watchdog, first instance
-    imageId
-'''
+def write_to_pickle(d):
+    with open(MINIMOTO_PICKLE_FILE, "wb") as handle:
+        pickle.dump(d, handle)
+
+
 def main():
     if len(sys.argv) < 4:
         print("Not enough arguments")
@@ -124,6 +124,8 @@ def main():
     keyfile = sys.argv[1]
     aws_access_key_id = sys.argv[2]
     aws_secret_access_key = sys.argv[3]
+
+    minimoto_info = {}
 
     print("Setting keys and region")
     subprocess.run(["aws", "configure", "set", "aws_access_key_id",
@@ -138,8 +140,11 @@ def main():
     ec2 = boto3.resource("ec2")
 
     print("Creating SQS queue")
-    sqs.create_queue(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME,
-                     Attributes={"VisibilityTimeout": "30"})
+    queue = sqs.create_queue(
+        QueueName=TRANSCODING_REQUESTS_QUEUE_NAME,
+        Attributes={"VisibilityTimeout": "30"})
+    minimoto_info["queue_url"] = queue.url
+    write_to_pickle(minimoto_info)
 
     print("Creating input S3 bucket")
     try:
@@ -226,17 +231,23 @@ def main():
                    ["minimoto_client", "minimoto_constants.py"],
                    keyfile)
     client_url = client_instance.public_dns_name
+    minimoto_info["client_instance_id"] = client_instance.id
+    write_to_pickle(minimoto_info)
 
     print("Setting up EC2 watchdog instance")
     setup_instance(watchdog_instance,
                    ["minimoto_watchdog", "minimoto_constants.py"],
                    keyfile)
     watchdog_url = watchdog_instance.public_dns_name
+    minimoto_info["watchdog_instance_id"] = watchdog_instance.id
+    write_to_pickle(minimoto_info)
 
     print("Setting up EC2 service instance")
     setup_instance(service_instance,
                    ["minimoto_service", "img2video", "minimoto_constants.py"],
                    keyfile)
+    minimoto_info["service_instance_id"] = service_instance.id
+    write_to_pickle(minimoto_info)
 
     print("Creating AMI from EC2 service instance for watchdog")
     service_ami = service_instance.create_image(Name=SERVICE_AMI_NAME)
@@ -248,6 +259,8 @@ def main():
             ]
         },
     ])
+    minimoto_info["image_id"] = service_ami.id
+    write_to_pickle(minimoto_info)
     waiter.wait(InstanceIds=[service_instance.id])
 
     print("minimoto_setup: mandatory output messages follow:")
