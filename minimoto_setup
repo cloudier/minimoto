@@ -74,7 +74,6 @@ to you what those messages are.
 """
 
 # TODO check failure
-# TODO figure out what minimoto_cleanup neeeds to know and print to a file for minimoto_cleanup
 
 import os
 import sys

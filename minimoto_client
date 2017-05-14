@@ -41,11 +41,30 @@ are.
 
 import sys
 
-images_dir = sys.argv[1]
-input_bucket_url = sys.argv[2]
-output_bucket_url = sys.argv[3]
+def main():
+    if len(sys.argv < 4):
+        print("Not enough arguments")
+        exit(1)
+    images_dir = sys.argv[1]
+    input_bucket_url = sys.argv[2]
+    output_bucket_url = sys.argv[3]
+
+    # TODO upload images in images_dir to input s3 bucket
+    # TODO ensure filename is random and unique (dir name + filename + timestamp?)
+
+    # TODO upload pickle as well so we can access SQS queue url?
+    # TODO send request to SQS
+
+    # TODO print msg with s3 URL of video file in output s3 bucket
+    # (how will we know this?)
+
+    # TODO if --wait, then wait until transcoding is done before exiting
 
 
 '''
 aws sqs send-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --message-body memes
 '''
+
+if __name__ == "__main__":
+    main()
+
