@@ -90,3 +90,7 @@ ENV/
 
 # Vim
 .*.swp
+
+# Pickle
+*.pickle
+
