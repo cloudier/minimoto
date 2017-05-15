@@ -56,6 +56,7 @@ def main():
         sqs = boto3.client("sqs")
         s3 = boto3.resource("s3")
         ec2 = boto3.client("ec2")
+        iam = boto3.resource('iam')
 
         print("Deleting SQS queue")
         try:
@@ -70,13 +71,16 @@ def main():
         deleteBucket(s3, OUTPUT_BUCKET_NAME)
 
         print("Terminating client instance")
-        terminateInstance(ec2, minimoto_info["client_instance_id"])
+        if "client_instance_id" in minimoto_info:
+            terminateInstance(ec2, minimoto_info["client_instance_id"])
 
         print("Terminating watchdog instance")
-        terminateInstance(ec2, minimoto_info["watchdog_instance_id"])
+        if "watchdog_instance_id" in minimoto_info:
+            terminateInstance(ec2, minimoto_info["watchdog_instance_id"])
 
         print("Terminating original service instance")
-        terminateInstance(ec2, minimoto_info["service_instance_id"])
+        if "service_instance_id" in minimoto_info:
+            terminateInstance(ec2, minimoto_info["service_instance_id"])
 
         print("Terminating new service instances")
         try:
@@ -100,7 +104,31 @@ def main():
 
         print("Deleting security group")
         try:
+            waiter = boto3.client('ec2').get_waiter("instance_terminated")
+            waiter.wait(InstanceIds=[
+                minimoto_info["client_instance_id"],
+                minimoto_info["watchdog_instance_id"],
+                minimoto_info["service_instance_id"]
+            ])
             ec2.delete_security_group(GroupName=SECURITY_GROUP_NAME)
+        except Exception as e:
+            print(e)
+
+        print("Deleting IAM instance profile")
+        try:
+            ip = iam.InstanceProfile(IAM_PROFILE_NAME)
+            for role in ip.roles:
+                ip.remove_role(RoleName=role.role_name)
+            ip.delete()
+        except Exception as e:
+            print(e)
+
+        print("Deleting IAM role")
+        try:
+            role = iam.Role(IAM_ROLE_NAME)
+            for policy in role.attached_policies.all():
+                role.detach_policy(PolicyArn=policy.arn)
+            role.delete()
         except Exception as e:
             print(e)
 

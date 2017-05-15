@@ -9,5 +9,7 @@ OUTPUT_BUCKET_NAME = INVERSE_GROUP_DOMAIN + ".output"
 SERVICE_AMI_NAME = INVERSE_GROUP_DOMAIN + ".service.ami"
 SECURITY_GROUP_NAME = "group12-ssh-security-group"
 IAM_ROLE_NAME = "group12-iam-role"
+IAM_PROFILE_NAME = "group12-iam-profile"
+IAM_TRUST_POLICY = "iam_trust_policy.json"
 MINIMOTO_PICKLE_FILE = "minimoto_info.pickle"
 
