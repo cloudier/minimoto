@@ -39,11 +39,43 @@ log file per service instance. All transcoding processes running on the same
 service instance must write (append) to the same log file.
 """
 
-print("minimoto service starting")
-print("minimoto service finished")
+import os
+import boto3
 
-'''
-aws sqs delete-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --receipt-handle "AQEByQUiYpTQHNjt5oo3keRpJDp49dUZZtSCaHT8jNxk7pT0QuN8H5KgV13lI5ThBs+hcOBVxNj+GNLYJNa1OTr6Id048+l718hM8lCA421hFf8f9aJCNeUl4EkGE++pbAwiuNRyGJBX1P57MoC4q2wfuhHWn6cKSNUtQUy/kPdwKl3LTTnS+Xn2EzWPpN+0gdu/vDy6DKdUiCEwEBsp/nLzj6cHJbTEtq+6ScvJ5Zs/5as70fZiGF2GEF4srHnr8y5HhwwRtKZZcKp+6rYg0yCpWN220oakfqkjiY3vcAdqRMhp1Y/UXl04PajJcl3nBlXB8rYhdiouv+kVCFzkR3e73FXL7qJ68YWtKNmVcns4RpDb03IGV13jaC8y3utDrp6s2OhzwkbPHfaOORclTNTonQ=="
+from minimoto_constants import *
 
-aws sqs receive-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12
-'''
+
+def main():
+    # Log to minimoto.log
+    print("minimoto service starting")
+    print("minimoto service finished")
+
+    '''
+    aws sqs delete-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --receipt-handle "AQEByQUiYpTQHNjt5oo3keRpJDp49dUZZtSCaHT8jNxk7pT0QuN8H5KgV13lI5ThBs+hcOBVxNj+GNLYJNa1OTr6Id048+l718hM8lCA421hFf8f9aJCNeUl4EkGE++pbAwiuNRyGJBX1P57MoC4q2wfuhHWn6cKSNUtQUy/kPdwKl3LTTnS+Xn2EzWPpN+0gdu/vDy6DKdUiCEwEBsp/nLzj6cHJbTEtq+6ScvJ5Zs/5as70fZiGF2GEF4srHnr8y5HhwwRtKZZcKp+6rYg0yCpWN220oakfqkjiY3vcAdqRMhp1Y/UXl04PajJcl3nBlXB8rYhdiouv+kVCFzkR3e73FXL7qJ68YWtKNmVcns4RpDb03IGV13jaC8y3utDrp6s2OhzwkbPHfaOORclTNTonQ=="
+
+    aws sqs receive-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12
+    '''
+    # If the instance is still processing the previous request, do nothing and exit.
+    # ?????
+
+    # Pull a request from an SQS queue. If no request is found, do nothing and exit.
+    print("Trying to get a request from queue")
+    sqs = boto3.resource("sqs", region_name="ap-southeast-2")
+    queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
+    message = queue.receive_messages()
+
+    # Download all images from the S3 bucket specified in the request (e.g., au.edu.unsw.cs9243.input/sample_images_xyz).
+    s3 = boto3.resource("s3", region_name="ap-southeast-2")
+    input_bucket = s3.Bucket(INPUT_BUCKET_NAME)
+
+    # Convert a series of images to an MP4 video using avconv (it is up to you how you order the images, but ordering based on filename would be sufficient).
+    # Upload the MP4 video to the S3 bucket specified in the request (e.g., au.edu.unsw.cs9243.output).
+    video_name = ".mp4"
+    output_bucket = s3.Bucket(OUTPUT_BUCKET_NAME)
+    output_bucket.upload_file(video_name, video_name)
+    # Delete request from queue
+
+
+if __name__ == "__main__":
+    main()
+
