@@ -93,7 +93,8 @@ def start_instance(ec2, filename, keyname, userdata):
             InstanceType="t2.small",
             KeyName=keyname,
             SecurityGroups=[SECURITY_GROUP_NAME],
-            UserData=userdatafile.read()
+            UserData=userdatafile.read(),
+            #IamInstanceProfile={"Arn": role.arn, "Name": role.name}
         )
     return instances[0]
 
@@ -137,6 +138,7 @@ def main():
     sqs = boto3.resource("sqs")
     s3 = boto3.resource("s3")
     ec2 = boto3.resource("ec2")
+    iam = boto3.resource("iam")
 
     print("Creating SQS queue")
     queue = sqs.create_queue(
@@ -203,6 +205,8 @@ def main():
             print("Security group already exists")
         else:
             raise
+
+    # TODO create IAM role for ec2 instances so they can access ec2/sqs/s3
 
     print("Starting EC2 client instance")
     client_instance = start_instance(ec2, "minimoto_client", keyname,

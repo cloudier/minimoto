@@ -98,6 +98,12 @@ def main():
         except Exception as e:
             print(e)
 
+        print("Deleting security group")
+        try:
+            ec2.delete_security_group(GroupName=SECURITY_GROUP_NAME)
+        except Exception as e:
+            print(e)
+
 
 if __name__ == "__main__":
     main()
