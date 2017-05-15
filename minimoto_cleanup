@@ -94,7 +94,7 @@ def main():
             image = response["Images"][0]
             snapshotId = image["BlockDeviceMappings"][0]["Ebs"]["SnapshotId"]
             ec2.deregister_image(ImageId=minimoto_info["image_id"])
-            ec2.delete_snapshot(snapshotId)
+            ec2.delete_snapshot(SnapshotId=snapshotId)
         except Exception as e:
             print(e)
 

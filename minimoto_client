@@ -42,35 +42,52 @@ are.
 import os
 import sys
 import boto3
+import random
+import string
 
 from minimoto_constants import *
 
+RANDOMWORD_LENGTH = 10
+
+
+def randomword():
+   return ''.join(random.choice(string.ascii_lowercase)
+                  for i in range(RANDOMWORD_LENGTH))
+
 
 def main():
-    if len(sys.argv < 4):
+    if len(sys.argv) < 4:
         print("Not enough arguments")
         exit(1)
-    images_dir = sys.argv[1]
-    input_bucket_url = sys.argv[2]
-    output_bucket_url = sys.argv[3]
+    images_dir = os.path.normpath(sys.argv[1])
+    s3_dirname = images_dir + "_" + randomword()
+    input_bucket_name = sys.argv[2]
+    output_bucket_name = sys.argv[3]
+    wait_flag = False
+    if len(sys.argv) == 5 and sys.argv[4] == "--wait":
+        wait_flag = True
 
     print("Getting boto3 clients and resources")
     s3 = boto3.resource("s3")
+    sqs = boto3.resource("sqs")
 
-    # TODO upload images in images_dir to input s3 bucket
-    # TODO ensure filename is random and unique (dir name + filename + timestamp?)
-    input_bucket = s3.Bucket(INPUT_BUCKET_NAME)
+    print("Uploading images in {} to input bucket at {}".format(
+          images_dir, s3_dirname))
+    input_bucket = s3.Bucket(input_bucket_name)
     for image in os.listdir(images_dir):
         input_bucket.upload_file(os.path.join(images_dir, image),
-                                 "s3 filename")
+                                 os.path.join(s3_dirname, image))
 
-    # TODO upload pickle as well so we can access SQS queue url?
-    # TODO send request to SQS
+    print("Sending message to transcoding queue")
+    queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
+    queue.send_message(MessageBody=s3_dirname)
 
-    # TODO if --wait, then wait until transcoding is done before exiting
-    # TODO print msg with s3 URL of video file in output s3 bucket
-    print("You'll find the output in s3://{bucket_name}/{s3_filename}.mp4" %
-          (bucket_name=OUTPUT_BUCKET_NAME, s3_filename=s3_filename))
+    if wait_flag:
+        print("Waiting for transcoding to complete...")
+        output_obj = s3.Object(output_bucket_name, s3_dirname + ".mp4")
+        output_obj.wait_until_exists()
+    print("You'll find the output in s3://{bucket_name}/{s3_dirname}.mp4"
+          .format(bucket_name=output_bucket_name, s3_dirname=s3_dirname))
 
 
 if __name__ == "__main__":
