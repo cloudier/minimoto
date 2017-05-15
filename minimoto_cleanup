@@ -29,19 +29,22 @@ resource, rather than exit).
 import boto3
 import pickle
 
-from contextlib import suppress
 from minimoto_constants import *
 
 
 def deleteBucket(s3, bucket_name):
-    with suppress(Exception):
+    try:
         bucket = s3.Bucket(bucket_name)
         bucket.objects.all().delete()
         bucket.delete()
+    except Exception as e:
+        print(e)
 
 def terminateInstance(ec2, instance_id):
-    with suppress(Exception):
+    try:
         ec2.terminate_instances(InstanceIds=[instance_id])
+    except Exception as e:
+        print(e)
 
 
 def main():
@@ -55,8 +58,10 @@ def main():
         ec2 = boto3.client("ec2")
 
         print("Deleting SQS queue")
-        with suppress(Exception):
+        try:
             sqs.delete_queue(QueueUrl=minimoto_info["queue_url"])
+        except Exception as e:
+            print(e)
 
         print("Deleting S3 input bucket")
         deleteBucket(s3, INPUT_BUCKET_NAME)
@@ -74,20 +79,24 @@ def main():
         terminateInstance(ec2, minimoto_info["service_instance_id"])
 
         print("Terminating new service instances")
-        with suppress(Exception):
+        try:
             service_instances = ec2.describe_instances(
                 Filters=[{"Name": "image-id", "Values": [minimoto_info["image_id"]]}])
             for reservation in service_instances["Reservations"]:
                 for instance in reservation["Instances"]:
                     terminateInstance(ec2, instance["InstanceId"])
+        except Exception as e:
+            print(e)
 
         print("Deregistering service AMI and deleting snapshot")
-        with suppress(Exception):
+        try:
             response = ec2.describe_images(ImageIds=[minimoto_info["image_id"]])
             image = response["Images"][0]
             snapshotId = image["BlockDeviceMappings"][0]["Ebs"]["SnapshotId"]
             ec2.deregister_image(ImageId=minimoto_info["image_id"])
             ec2.delete_snapshot(snapshotId)
+        except Exception as e:
+            print(e)
 
 
 if __name__ == "__main__":

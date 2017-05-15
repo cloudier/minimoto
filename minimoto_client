@@ -39,7 +39,12 @@ messages regarding its progress as well, it is up to you what those messages
 are.
 """
 
+import os
 import sys
+import boto3
+
+from minimoto_constants import *
+
 
 def main():
     if len(sys.argv < 4):
@@ -49,21 +54,24 @@ def main():
     input_bucket_url = sys.argv[2]
     output_bucket_url = sys.argv[3]
 
+    print("Getting boto3 clients and resources")
+    s3 = boto3.resource("s3")
+
     # TODO upload images in images_dir to input s3 bucket
     # TODO ensure filename is random and unique (dir name + filename + timestamp?)
+    input_bucket = s3.Bucket(INPUT_BUCKET_NAME)
+    for image in os.listdir(images_dir):
+        input_bucket.upload_file(os.path.join(images_dir, image),
+                                 "s3 filename")
 
     # TODO upload pickle as well so we can access SQS queue url?
     # TODO send request to SQS
 
-    # TODO print msg with s3 URL of video file in output s3 bucket
-    # (how will we know this?)
-
     # TODO if --wait, then wait until transcoding is done before exiting
+    # TODO print msg with s3 URL of video file in output s3 bucket
+    print("You'll find the output in s3://{bucket_name}/{s3_filename}.mp4" %
+          (bucket_name=OUTPUT_BUCKET_NAME, s3_filename=s3_filename))
 
-
-'''
-aws sqs send-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --message-body memes
-'''
 
 if __name__ == "__main__":
     main()
