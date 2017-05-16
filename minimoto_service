@@ -90,7 +90,6 @@ def main():
     # Convert a series of images to an MP4 video using avconv (it is up to you
     # how you order the images, but ordering based on filename would be
     # sufficient).
-    #TODO: check this does what I think it does
     try:
         subprocess.check_call(["./img2video", LOCAL_IMAGES_DIR,
                                LOCAL_VIDEO_FILE])

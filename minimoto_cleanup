@@ -76,14 +76,15 @@ def main():
         except Exception as e:
             print(e)
 
-        print("Deleting security group")
         try:
+            print("Waiting for instances to terminate")
             waiter = boto3.client('ec2').get_waiter("instance_terminated")
             waiter.wait(InstanceIds=[
                 minimoto_info["client_instance_id"],
                 minimoto_info["watchdog_instance_id"],
                 minimoto_info["service_instance_id"]
             ])
+            print("Deleting security group")
             ec2.delete_security_group(GroupName=SECURITY_GROUP_NAME)
         except Exception as e:
             print(e)
@@ -109,4 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
