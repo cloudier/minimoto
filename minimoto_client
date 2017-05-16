@@ -5,14 +5,15 @@ import sys
 import boto3
 import random
 import string
+import subprocess
 
 from minimoto_constants import *
 
-RANDOMWORD_LENGTH = 10
+RANDOMWORD_LENGTH = 30
 
 
 def randomword():
-   return ''.join(random.choice(string.ascii_lowercase)
+   return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase)
                   for i in range(RANDOMWORD_LENGTH))
 
 
@@ -21,7 +22,7 @@ def main():
         print("Not enough arguments")
         exit(1)
     images_dir = os.path.normpath(sys.argv[1])
-    s3_dirname = images_dir + "_" + randomword()
+    s3_dirname = randomword()
     input_bucket_name = sys.argv[2]
     output_bucket_name = sys.argv[3]
     wait_flag = False
@@ -34,10 +35,9 @@ def main():
 
     print("Uploading images in {} to input bucket at {}".format(
           images_dir, s3_dirname))
-    input_bucket = s3.Bucket(input_bucket_name)
-    for image in os.listdir(images_dir):
-        input_bucket.upload_file(os.path.join(images_dir, image),
-                                 os.path.join(s3_dirname, image))
+
+    subprocess.run(["aws", "--region", "ap-southeast-2", "s3", "sync",
+                    images_dir, "s3://%s/%s" % (input_bucket_name, s3_dirname)])
 
     print("Sending message to transcoding queue")
     queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
@@ -53,4 +53,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -41,41 +41,86 @@ service instance must write (append) to the same log file.
 
 import os
 import boto3
+import shutil
+import subprocess
 
 from minimoto_constants import *
 
+RUNNING_FILE_NAME = "MINIMOTO_SERVICE_RUNNING"
+LOCAL_IMAGES_DIR = "images_dir"
+LOCAL_VIDEO_FILE = "video_file.mp4"
 
 def main():
     # Log to minimoto.log
     print("minimoto service starting")
-    print("minimoto service finished")
 
-    '''
-    aws sqs delete-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12 --receipt-handle "AQEByQUiYpTQHNjt5oo3keRpJDp49dUZZtSCaHT8jNxk7pT0QuN8H5KgV13lI5ThBs+hcOBVxNj+GNLYJNa1OTr6Id048+l718hM8lCA421hFf8f9aJCNeUl4EkGE++pbAwiuNRyGJBX1P57MoC4q2wfuhHWn6cKSNUtQUy/kPdwKl3LTTnS+Xn2EzWPpN+0gdu/vDy6DKdUiCEwEBsp/nLzj6cHJbTEtq+6ScvJ5Zs/5as70fZiGF2GEF4srHnr8y5HhwwRtKZZcKp+6rYg0yCpWN220oakfqkjiY3vcAdqRMhp1Y/UXl04PajJcl3nBlXB8rYhdiouv+kVCFzkR3e73FXL7qJ68YWtKNmVcns4RpDb03IGV13jaC8y3utDrp6s2OhzwkbPHfaOORclTNTonQ=="
+    # If the instance is still processing the previous request, do nothing and
+    # exit.
+    if os.path.exists(RUNNING_FILE_NAME):
+        print("minimoto service still running, exiting")
+        return
 
-    aws sqs receive-message --queue-url https://sqs.ap-southeast-2.amazonaws.com/442016026318/minimoto-group-12
-    '''
-    # If the instance is still processing the previous request, do nothing and exit.
-    # ?????
+    running_file = open(RUNNING_FILE_NAME, "w+")
+    running_file.close()
 
-    # Pull a request from an SQS queue. If no request is found, do nothing and exit.
+    # Pull a request from an SQS queue. If no request is found, do nothing and
+    # exit.
     print("Trying to get a request from queue")
+    s3 = boto3.resource("s3", region_name="ap-southeast-2")
     sqs = boto3.resource("sqs", region_name="ap-southeast-2")
     queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
-    message = queue.receive_messages()
+    messages = queue.receive_messages()
 
-    # Download all images from the S3 bucket specified in the request (e.g., au.edu.unsw.cs9243.input/sample_images_xyz).
-    s3 = boto3.resource("s3", region_name="ap-southeast-2")
-    input_bucket = s3.Bucket(INPUT_BUCKET_NAME)
+    if len(messages) == 0:
+        print("No messages in queue, exiting")
+        os.remove(RUNNING_FILE_NAME)
+        return
 
-    # Convert a series of images to an MP4 video using avconv (it is up to you how you order the images, but ordering based on filename would be sufficient).
-    # Upload the MP4 video to the S3 bucket specified in the request (e.g., au.edu.unsw.cs9243.output).
-    video_name = ".mp4"
+    message = messages[0]
+    s3_dirname = message.body
+
+    print("Processing message to create %s.mp4" % s3_dirname)
+
+    # Download all images from the S3 bucket specified in the request
+    # (e.g., au.edu.unsw.cs9243.input/sample_images_xyz).
+    subprocess.run(["aws", "--region", "ap-southeast-2", "s3", "sync",
+                    "s3://%s/%s" % (INPUT_BUCKET_NAME, s3_dirname),
+                    LOCAL_IMAGES_DIR])
+
+    # Convert a series of images to an MP4 video using avconv (it is up to you
+    # how you order the images, but ordering based on filename would be
+    # sufficient).
+    #TODO: check this does what I think it does
+    try:
+        subprocess.check_call(["./img2video", LOCAL_IMAGES_DIR,
+                               LOCAL_VIDEO_FILE])
+    except Exception as e:
+        print("img2video failed")
+        shutil.rmtree(LOCAL_IMAGES_DIR)
+        os.remove(LOCAL_VIDEO_FILE)
+        os.remove(RUNNING_FILE_NAME)
+        return
+
+    # Upload the MP4 video to the S3 bucket specified in the request
+    # (e.g., au.edu.unsw.cs9243.output).
     output_bucket = s3.Bucket(OUTPUT_BUCKET_NAME)
-    output_bucket.upload_file(video_name, video_name)
-    # Delete request from queue
+    output_bucket.upload_file(LOCAL_VIDEO_FILE, s3_dirname + ".mp4")
+
+    # delete images from input bucket
+    subprocess.run(["aws", "--region", "ap-southeast-2", "s3", "rm",
+                    "s3://%s/%s" % (INPUT_BUCKET_NAME, s3_dirname),
+                    "--recursive"])
+
+    # Delete processed message from queue
+    message.delete()
+
+    shutil.rmtree(LOCAL_IMAGES_DIR)
+    os.remove(LOCAL_VIDEO_FILE)
+    os.remove(RUNNING_FILE_NAME)
 
 
 if __name__ == "__main__":
-    main()
-
+    try:
+        main()
+    except Exception:
+        os.remove(RUNNING_FILE_NAME)
