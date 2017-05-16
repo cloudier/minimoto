@@ -1,47 +1,125 @@
 #!/usr/bin/python3
 
 """
-There are no mandatory output messages. The watchdog program may print out other
-messages regarding its progress, it is up to you what those messages are.
-
-The watchdog service is executed occasionally (e.g., every couple of minutes)
-and adjusts the size of the service instance pool. The watchdog program does not
-run continuously. When executed it makes any adjustments of the service instance
-pool and then exits.
-
-The optional --status flag implements status monitoring of instances. When
-invoked with this flag minimoto_watchdog should list all running service
-instances, their status and utilisation, a summary of the overall system
-utilisation and queue length, and then exit. The output should look like the
-following:
-    instance: <instance-id> <status> <utilisation>
-    average utilisation: <average-utilisation>
-    queue length: <queue-length>
-Where there is an instance: line for each service instance (<instance-id> is an
-AWS instance ID (e.g., i-c6afc244), <status> is one of stopped or running, and
-<utilisation> is the CPU utilisation in percent (e.g. 50%)). The last two lines
-are summary lines, where <average-utilisation> is the average CPU utilisation of
-all service instances in percent, and <queue-length> is the (approximate) SQS
-queue length.
-
-The watchdog should only ever manage minimoto service instances. Make sure that
-it doesn’t monitor, stop or kill non-minimoto EC2 instances. Also make sure it
-does not kill the client or watchdog instances.
-
-Optional Features
-
 - To reduce the instance usage cost under a fluctuating workload, take into
 account billing cycles before terminating instances.
 - On scaling in, avoid terminating an instance that is processing a request.
 This helps avoid extra turnaround time for the request due to retries.
+
+    # can leave each instance up for the billing cycle (1 hr)
+    # if smth is running and killed, then it will put the msg back in the queue
+
 """
 
 import sys
+import glob
+import boto3
+import datetime
+import operator
 
-if sys.argv[1] == "--status":
-    pass
-# if queue has heaps of msgs, divide by 10 and make that many instances
-# can leave each instance up for the billing cycle (1 hr)
-# if no msgs in queue and some idle instances, kill idle instances
-# if smth is running and killed, then it will put the msg back in the queue
+from minimoto_constants import *
+
+MSG_THRESHOLD = 10
+
+def start_instances(ec2, keyfile, ami, arn, num_instances):
+    with open("minimoto_service_userdata", "r") as userdatafile:
+        instances = ec2.create_instances(
+            ImageId=ami,
+            MinCount=1,
+            MaxCount=1, #TODO max is 20, iterate if instances required > 20
+            InstanceType="t2.small",
+            KeyName=keyfile[:-4],
+            SecurityGroups=[SECURITY_GROUP_NAME],
+            UserData=userdatafile.read(),
+            IamInstanceProfile={"Arn": arn}
+            TagSpecifications=[{
+                "ResourceType": "instance",
+                "Tags": [{"Key": INSTANCE_TAG_NAME,
+                          "Value": INSTANCE_TAG_VALUE}]
+            }]
+        )
+    # TODO wait on instances
+
+    # TODO for eaach instance
+    instance.reload()
+    instance_url = instance.public_dns_name
+    files = ["minimoto_service", "img2video", "minimoto_constants.py"]
+    for filename in files:
+        print("Uploading " + filename)
+        subprocess.check_call(["scp", "-o", "StrictHostKeyChecking no", "-i",
+                               keyfile, filename,
+                               "%s@%s:/home/%s/" % (USER, instance_url, USER)])
+
+def get_cpu_util(metric, instance, start, end):
+    # Get average over last 5 minutes
+    metric_response = metric.get_statistics(
+        Dimensions=[{"Name": "InstanceId",
+                     "Value": instance["InstanceId"]}],
+        StartTime=start, EndTime=end,
+        Unit="Percent",
+        Period=300,
+        Statistics=["Average"])
+    sorted_points = sorted(metric_response["Datapoints"],
+                           key=operator.itemgetter("Timestamp"))
+    last_point = sorted_points[-1]
+    return last_point["Average"] * 100
+
+
+def main():
+    print("Getting boto3 resources")
+    sqs = boto3.resource("sqs")
+    ec2 = boto3.client("ec2")
+    iam = boto3.client("iam")
+    cloudwatch = boto3.resource("cloudwatch")
+
+    print("Finding the number of messages in the queue...")
+    queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
+    messages_in_queue = int(queue.attributes["ApproximateNumberOfMessages"])
+    print("There are {} messages in the queue".format(messages_in_queue))
+
+    print("Getting information about current instances...")
+    service_instances = []
+    di_response = ec2.describe_instances(
+        Filters=[{"Name": "tag:{}".format(INSTANCE_TAG_NAME),
+                  "Values": [INSTANCE_TAG_VALUE]}])
+    for reservation in di_response["Reservations"]:
+        for instance in reservation["Instances"]:
+            service_instances.append(instance)
+
+    if messages_in_queue > MSG_THRESHOLD:
+        instances_to_start = messages_in_queue // MSG_THRESHOLD
+        keyfile = glob.glob("*.pem")[0]
+        arn = ec2.get_instance_profile(
+            InstanceProfileName=IAM_PROFILE_NAME)["InstanceProfile"]["Arn"]
+        dim_response = ec2.describe_images(
+            Filter=[{"Name": "name",
+                     "Values": [SERVICE_AMI_NAME]}])
+        ami = dim_response["Images"][0]["ImageId"]
+        print("Starting {} instances".format(instances_to_start))
+        start_instances(ec2, keyfile, ami, arn, instances_to_start)
+    elif messages_in_queue == 0:
+        # TODO check if there are idle instances
+            # TODO kill idle instances
+        pass
+
+    if len(sys.argv) == 2 and sys.argv[1] == "--status":
+        print("Getting status...")
+        total_utilisation = 0
+        metric = cloudwatch.Metric("AWS/EC2", "CPUUtilization")
+        now = datetime.datetime.utcnow()
+        start = now - datetime.timedelta(minutes=10)
+        end = now + datetime.timedelta(minutes=10)
+        for instance in service_instances:
+            instance_utilisation = get_cpu_util(metric, instance, start, end)
+            print("instance: {instance_id} {status} {:.0f}%"
+                  .format(instance_utilisation,
+                          instance_id=instance["InstanceId"],
+                          status=instance["State"]["Name"]))
+            total_utilisation += instance_utilisation
+        avg_util = total_utilisation / len(service_instances)
+        print("average utilisation: {:.0f}%".format(avg_util))
+        print("queue length: {}".format(messages_in_queue))
+
+if __name__ == "__main__":
+    main()
 

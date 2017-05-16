@@ -52,16 +52,15 @@ def main():
         if "watchdog_instance_id" in minimoto_info:
             terminateInstance(ec2, minimoto_info["watchdog_instance_id"])
 
-        print("Terminating original service instance")
-        if "service_instance_id" in minimoto_info:
-            terminateInstance(ec2, minimoto_info["service_instance_id"])
-
-        print("Terminating new service instances")
+        print("Terminating service instances")
+        service_instances = []
         try:
-            service_instances = ec2.describe_instances(
-                Filters=[{"Name": "image-id", "Values": [minimoto_info["image_id"]]}])
-            for reservation in service_instances["Reservations"]:
+            di_response = ec2.describe_instances(
+                Filters=[{"Name": "tag:{}".format(INSTANCE_TAG_NAME),
+                          "Values": [INSTANCE_TAG_VALUE]}])
+            for reservation in di_response["Reservations"]:
                 for instance in reservation["Instances"]:
+                    service_instances.append(instance["InstanceId"])
                     terminateInstance(ec2, instance["InstanceId"])
         except Exception as e:
             print(e)
@@ -82,8 +81,7 @@ def main():
             waiter.wait(InstanceIds=[
                 minimoto_info["client_instance_id"],
                 minimoto_info["watchdog_instance_id"],
-                minimoto_info["service_instance_id"]
-            ])
+            ] + service_instances)
             print("Deleting security group")
             ec2.delete_security_group(GroupName=SECURITY_GROUP_NAME)
         except Exception as e:
@@ -110,3 +108,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

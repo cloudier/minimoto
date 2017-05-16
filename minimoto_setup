@@ -18,7 +18,7 @@ import subprocess
 from minimoto_constants import *
 
 
-def start_instance(ec2, filename, keyname, userdata, arn):
+def start_instance(ec2, keyname, userdata, arn, tagspec):
     while True:
         try:
             with open(userdata, "r") as userdatafile:
@@ -30,7 +30,8 @@ def start_instance(ec2, filename, keyname, userdata, arn):
                     KeyName=keyname,
                     SecurityGroups=[SECURITY_GROUP_NAME],
                     UserData=userdatafile.read(),
-                    IamInstanceProfile={"Arn": arn}
+                    IamInstanceProfile={"Arn": arn},
+                    TagSpecifications=tagspec
                 )
         except boto3.exceptions.botocore.errorfactory.ClientError as e:
             if e.response["Error"]["Code"] == "InvalidParameterValue":
@@ -171,16 +172,20 @@ def main():
             raise
 
     print("Starting EC2 client instance")
-    client_instance = start_instance(ec2, "minimoto_client", keyname,
-                                     "minimoto_default_userdata", arn)
+    client_instance = start_instance(ec2, keyname,
+                                     "minimoto_default_userdata", arn, [])
 
     print("Starting EC2 watchdog instance")
-    watchdog_instance = start_instance(ec2, "minimoto_watchdog", keyname,
-                                       "minimoto_default_userdata", arn)
+    watchdog_instance = start_instance(ec2, keyname,
+                                       "minimoto_default_userdata", arn, [])
 
     print("Starting EC2 service instance")
-    service_instance = start_instance(ec2, "minimoto_service", keyname,
-                                      "minimoto_service_userdata", arn)
+    ts = [{
+        "ResourceType": "instance",
+        "Tags": [{"Key": INSTANCE_TAG_NAME, "Value": INSTANCE_TAG_VALUE}]
+        }]
+    service_instance = start_instance(ec2, keyname,
+                                      "minimoto_service_userdata", arn, ts)
 
     print("Waiting until instances OK")
     # This should wait until the init script for all instances has finished
@@ -201,7 +206,10 @@ def main():
 
     print("Setting up EC2 watchdog instance")
     setup_instance(watchdog_instance,
-                   ["minimoto_watchdog", "minimoto_constants.py"],
+                   ["minimoto_watchdog", "minimoto_constants.py",
+                    os.path.normpath(keyfile),
+                    "minimoto_service", "img2video",
+                    "minimoto_service_userdata"],
                    keyfile)
     watchdog_url = watchdog_instance.public_dns_name
     minimoto_info["watchdog_instance_id"] = watchdog_instance.id
@@ -211,8 +219,6 @@ def main():
     setup_instance(service_instance,
                    ["minimoto_service", "img2video", "minimoto_constants.py"],
                    keyfile)
-    minimoto_info["service_instance_id"] = service_instance.id
-    write_to_pickle(minimoto_info)
 
     print("Creating AMI from EC2 service instance for watchdog")
     service_ami = service_instance.create_image(Name=SERVICE_AMI_NAME)
