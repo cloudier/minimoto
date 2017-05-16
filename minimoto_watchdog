@@ -40,3 +40,8 @@ import sys
 
 if sys.argv[1] == "--status":
     pass
+# if queue has heaps of msgs, divide by 10 and make that many instances
+# can leave each instance up for the billing cycle (1 hr)
+# if no msgs in queue and some idle instances, kill idle instances
+# if smth is running and killed, then it will put the msg back in the queue
+

@@ -19,17 +19,27 @@ from minimoto_constants import *
 
 
 def start_instance(ec2, filename, keyname, userdata, arn):
-    with open(userdata, "r") as userdatafile:
-        instances = ec2.create_instances(
-            ImageId="ami-96666ff5",
-            MinCount=1,
-            MaxCount=1,
-            InstanceType="t2.small",
-            KeyName=keyname,
-            SecurityGroups=[SECURITY_GROUP_NAME],
-            UserData=userdatafile.read(),
-            IamInstanceProfile={"Arn": arn}
-        )
+    while True:
+        try:
+            with open(userdata, "r") as userdatafile:
+                instances = ec2.create_instances(
+                    ImageId="ami-96666ff5",
+                    MinCount=1,
+                    MaxCount=1,
+                    InstanceType="t2.small",
+                    KeyName=keyname,
+                    SecurityGroups=[SECURITY_GROUP_NAME],
+                    UserData=userdatafile.read(),
+                    IamInstanceProfile={"Arn": arn}
+                )
+        except boto3.exceptions.botocore.errorfactory.ClientError as e:
+            if e.response["Error"]["Code"] == "InvalidParameterValue":
+                time.sleep(5)
+                print("Instance profile invalid, retrying...")
+                continue
+            else:
+                raise
+        break
     return instances[0]
 
 
@@ -152,10 +162,6 @@ def main():
             print("Security group already exists")
         else:
             raise
-
-    # TODO poll get_instance_profile until it has the correct roles
-    print("Waiting until instance profile has correct roles")
-    time.sleep(7)
 
     print("Starting EC2 client instance")
     client_instance = start_instance(ec2, "minimoto_client", keyname,
