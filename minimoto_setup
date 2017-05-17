@@ -1,11 +1,5 @@
 #!/usr/bin/python3
 
-"""
-- Since the setup program must perform a lot of work, the program may take a
-long time to run. However, if it takes more than 10 minutes, please note this
-and explain the reasons in your DESIGN doc.
-"""
-
 import os
 import sys
 import time
@@ -89,11 +83,16 @@ def main():
         try:
             role = iam.create_role(RoleName=IAM_ROLE_NAME,
                                    AssumeRolePolicyDocument=document)
-            role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonEC2FullAccess")
-            role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess")
-            role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess")
-            role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/IAMFullAccess")
-            ip = iam.create_instance_profile(InstanceProfileName=IAM_PROFILE_NAME)
+            role.attach_policy(
+                PolicyArn="arn:aws:iam::aws:policy/AmazonEC2FullAccess")
+            role.attach_policy(
+                PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess")
+            role.attach_policy(
+                PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess")
+            role.attach_policy(
+                PolicyArn="arn:aws:iam::aws:policy/IAMFullAccess")
+            ip = iam.create_instance_profile(
+                InstanceProfileName=IAM_PROFILE_NAME)
             ip.add_role(RoleName=role.name)
             arn = ip.arn
             print(arn)
@@ -162,7 +161,7 @@ def main():
             IpProtocol="TCP",
             FromPort=22,
             ToPort=22,
-            CidrIp='0.0.0.0/0'
+            CidrIp="0.0.0.0/0"
         )
     except boto3.exceptions.botocore.errorfactory.ClientError as e:
         if e.response["Error"]["Code"] == "InvalidGroup.Duplicate":
@@ -188,7 +187,7 @@ def main():
 
     print("Waiting until instances OK")
     # This should wait until the init script for all instances has finished
-    waiter = boto3.client('ec2').get_waiter("instance_status_ok")
+    waiter = boto3.client("ec2").get_waiter("instance_status_ok")
     waiter.wait(InstanceIds=[
         client_instance.id,
         watchdog_instance.id,
@@ -232,14 +231,14 @@ def main():
     waiter.wait(InstanceIds=[service_instance.id])
 
     print("minimoto_setup: mandatory output messages follow:")
-    print("S3_BUCKET_INPUT={}".format(input_bucket_url))    # the S3 URL of the input bucket
-    print("S3_BUCKET_OUTPUT={}".format(output_bucket_url))  # the S3 URL of the output bucket
-    print("CLIENT_USER={}".format(USER))                    # the user name used to log in to the client EC2 instance
-    print("CLIENT_ADDR={}".format(client_url))              # the address of the client EC2 instance
-    print("WATCHDOG_USER={}".format(USER))                  # the user name used to log in to the watchdog EC2 instance
-    print("WATCHDOG_ADDR={}".format(watchdog_url))          # the address of the watchdog EC2 instance
-    print("SERVICE_USER={}".format(USER))                   # the user name used to log in to a service EC2 instance
-    print("SERVICE_AMI={}".format(service_ami.id))          # the ID of the AMI used for service instances
+    print("S3_BUCKET_INPUT={}".format(input_bucket_url))
+    print("S3_BUCKET_OUTPUT={}".format(output_bucket_url))
+    print("CLIENT_USER={}".format(USER))
+    print("CLIENT_ADDR={}".format(client_url))
+    print("WATCHDOG_USER={}".format(USER))
+    print("WATCHDOG_ADDR={}".format(watchdog_url))
+    print("SERVICE_USER={}".format(USER))
+    print("SERVICE_AMI={}".format(service_ami.id))
 
 
 if __name__ == "__main__":

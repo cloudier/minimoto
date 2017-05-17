@@ -13,8 +13,9 @@ RANDOMWORD_LENGTH = 30
 
 
 def randomword():
-   return ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase)
-                  for i in range(RANDOMWORD_LENGTH))
+    list = random.choice(string.ascii_lowercase + string.ascii_uppercase
+                         for i in range(RANDOMWORD_LENGTH))
+    return "".join(list)
 
 
 def main():
@@ -37,7 +38,8 @@ def main():
           images_dir, s3_dirname))
 
     subprocess.run(["aws", "--region", "ap-southeast-2", "s3", "sync",
-                    images_dir, "s3://%s/%s" % (input_bucket_name, s3_dirname)])
+                    images_dir,
+                    "s3://%s/%s" % (input_bucket_name, s3_dirname)])
 
     print("Sending message to transcoding queue")
     queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)

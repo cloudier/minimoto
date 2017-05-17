@@ -10,11 +10,11 @@ distributed system made up of multiple servers that are transparent to the
 client. To convert a series of images into a video, the client first uploads
 the images into the input S3 bucket. The images for a particular video must be
 in one directory, and the directory is suffixed with a string of random
-lowercase ASCII characters so that multiple conversion requests with the same
-directory do not interfere with each other. Then, the client adds a message to
-the SQS queue with the name of the directory and the random suffix. The
-conversion is complete when the SQS message has been deleted and the resulting
-video is available in the output S3 bucket.
+ASCII characters so that multiple conversion requests with the same directory do
+not interfere with each other. Then, the client adds a message to the SQS queue
+with the name of the directory and the random suffix. The conversion is complete
+when the SQS message has been deleted and the resulting video is available in
+the output S3 bucket.
 
 The application that provides the service is run periodically via cron. If the
 instance it is running on isn't currently converting a video, it will grab a new
@@ -30,14 +30,17 @@ script:
   - Starts up the client, watchdog and service instances, and uploads files to
     these instances using scp.
   - Creates an AMI for the watchdog to use to setup new service instances.
+The clean up script cleans up the resources and instances created by the setup
+script, as well as anything created by the watchdog. It receives this
+information from the setup script via a pickle file. This could be replaced by
+using tags to mark the instances the cleanup script should terminate. The tags
+would be stored in `minimoto_constants.py`.
 
-The watchdog...
+The watchdog creates and destroys instances depending on their CPU utilisation
+and the number of messages in the SQS queue.
 
 ===============================================
 Algorithms
-
------------------------------------------------
-TODO think this part thru!
 
 -----------------------------------------------
 Transcoding service
@@ -56,6 +59,16 @@ Service program 3 finishes and tries removing request from the queue again
 -----------------------------------------------
 Watchdog
 
+The watchdog checks up on service instances using CloudWatch. It identifies
+service instances using a tag that is assigned on instance creation. (This tag
+is defined in `minimoto_constants.py`.) When launched with the `--status` flag,
+the watchdog prints out the status and CPU utilisation of each instance, as well
+as the average utilisation and the number of messages in the queue. Otherwise,
+the watchdog checks the number of messages in the queue. If there are messages
+but no instances, then the watchdog starts up an instance. If there are
+instances, then the watchdog will only start up another instance if there are
+more than 10 messages in the queue. If there are no messages, then the watchdog
+will kill instances with a CPU utilisation that is lower than 2%.
 
 ===============================================
 Code
@@ -113,8 +126,32 @@ Shortcomings
 -----------------------------------------------
 Security
 
+We could improve the security of our application by having multiple instance
+profiles. Our solution uses only one instance profile, which means that it has
+full access to EC2, SQS, S3 and IAM. The watchdog only needs IAM and EC2 access,
+whereas the client and service only requires SQS and S3 permissions.
+Furthermore, we provided full access to each of the services but we could have
+used a more restricted set of permissions to each service.
+
+We also pass the keyfile from the setup script to the watchdog script. We
+could instead have the watchdog generate a new keyfile for the service instances
+it starts up, but we thought that this would be inconvenient for the marker.
+
+Ideally, we would also protect sudo privileges on our EC2 instances with some
+sort of password. We believe that in this assignment, the inconvenience of this
+would outweigh the security benefit, given that no sensitive information is
+stored on the instances.
+
 -----------------------------------------------
 Performance
 
+We could improve the performance of our service by checking if there are
+multiple cores on the instance the service is running on and then ensuring that
+there is one conversion process for each core.
+
 -----------------------------------------------
 Cost
+
+Our watchdog does not take into account billing cycles when starting and
+stopping new instances. By leaving instances up until the end of an hour, we can
+gain more instance usage without increasing our costs.

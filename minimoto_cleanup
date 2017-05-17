@@ -14,6 +14,7 @@ def deleteBucket(s3, bucket_name):
     except Exception as e:
         print(e)
 
+
 def terminateInstance(ec2, instance_id):
     try:
         ec2.terminate_instances(InstanceIds=[instance_id])
@@ -30,7 +31,7 @@ def main():
         sqs = boto3.client("sqs")
         s3 = boto3.resource("s3")
         ec2 = boto3.client("ec2")
-        iam = boto3.resource('iam')
+        iam = boto3.resource("iam")
 
         print("Deleting SQS queue")
         try:
@@ -67,7 +68,8 @@ def main():
 
         print("Deregistering service AMI and deleting snapshot")
         try:
-            response = ec2.describe_images(ImageIds=[minimoto_info["image_id"]])
+            response = ec2.describe_images(
+                ImageIds=[minimoto_info["image_id"]])
             image = response["Images"][0]
             snapshotId = image["BlockDeviceMappings"][0]["Ebs"]["SnapshotId"]
             ec2.deregister_image(ImageId=minimoto_info["image_id"])
@@ -77,7 +79,7 @@ def main():
 
         try:
             print("Waiting for instances to terminate")
-            waiter = boto3.client('ec2').get_waiter("instance_terminated")
+            waiter = boto3.client("ec2").get_waiter("instance_terminated")
             waiter.wait(InstanceIds=[
                 minimoto_info["client_instance_id"],
                 minimoto_info["watchdog_instance_id"],
@@ -108,4 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

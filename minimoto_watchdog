@@ -12,32 +12,32 @@ from minimoto_constants import *
 MSG_THRESHOLD = 10
 IDLE_THRESHOLD = 2
 
+
 def start_instances(ec2, keyfile, ami, arn, num_instances):
     instances = []
     while len(instances) < num_instances:
-        with open("minimoto_service_userdata", "r") as userdatafile:
-            ec2r = boto3.resource("ec2", region_name="ap-southeast-2")
-            ci_response = ec2r.create_instances(
-                ImageId=ami,
-                MinCount=1,
-                MaxCount=1,
-                InstanceType="t2.small",
-                KeyName=keyfile[:-4],
-                SecurityGroups=[SECURITY_GROUP_NAME],
-                UserData=userdatafile.read(),
-                IamInstanceProfile={"Arn": arn},
-                TagSpecifications=[{
-                    "ResourceType": "instance",
-                    "Tags": [{"Key": INSTANCE_TAG_NAME,
-                              "Value": INSTANCE_TAG_VALUE}]
-                }]
-            )
-            instances.append(ci_response[0].id)
+        ec2r = boto3.resource("ec2", region_name="ap-southeast-2")
+        ci_response = ec2r.create_instances(
+            ImageId=ami,
+            MinCount=1,
+            MaxCount=1,
+            InstanceType="t2.small",
+            KeyName=keyfile[:-4],
+            SecurityGroups=[SECURITY_GROUP_NAME],
+            IamInstanceProfile={"Arn": arn},
+            TagSpecifications=[{
+                "ResourceType": "instance",
+                "Tags": [{"Key": INSTANCE_TAG_NAME,
+                          "Value": INSTANCE_TAG_VALUE}]
+            }]
+        )
+        instances.append(ci_response[0].id)
 
     # Wait until instance is set up
     print("Waiting for instances to be set up...")
     waiter = ec2.get_waiter("instance_status_ok")
     waiter.wait(InstanceIds=instances)
+
 
 def get_cpu_util(metric, instance, start, end):
     # Get average over last 5 minutes
@@ -98,7 +98,7 @@ def main():
     else:
         print("There are {} messages in the queue".format(messages_in_queue))
         if messages_in_queue > MSG_THRESHOLD or (
-            messages_in_queue > 0 and len(service_instances) == 0):
+                messages_in_queue > 0 and len(service_instances) == 0):
             instances_to_start = max(messages_in_queue // MSG_THRESHOLD, 1)
             keyfile = glob.glob("*.pem")[0]
             arn = iam.get_instance_profile(
@@ -116,11 +116,13 @@ def main():
             start = now - datetime.timedelta(minutes=10)
             end = now + datetime.timedelta(minutes=10)
             for instance in service_instances:
-                instance_utilisation = get_cpu_util(metric, instance, start, end)
+                instance_utilisation = get_cpu_util(
+                    metric, instance, start, end)
                 if instance_utilisation < IDLE_THRESHOLD:
                     iid = instance["InstanceId"]
                     print("Killing instance {}".format(iid))
                     ec2.terminate_instances(InstanceIds=[iid])
+
 
 if __name__ == "__main__":
     main()

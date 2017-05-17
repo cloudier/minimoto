@@ -1,44 +1,5 @@
 #!/usr/bin/python3
 
-"""
-The transcoding service layer is a pool of AWS EC2 instances, which we call
-service instances. Each service instance is launched from the same Amazon
-Machine Image (AMI), which you will have created as part of setup and which
-contains the image-to-video transcoding code you will have implemented.
-
-A transcoding process is launched by cron and must do the following.
-
-- If the instance is still processing the previous request, do nothing and exit.
-- Pull a request from an SQS queue. If no request is found, do nothing and exit.
-- Download all images from the S3 bucket specified in the request (e.g.,
-au.edu.unsw.cs9243.input/sample_images_xyz).
-- Convert a series of images to an MP4 video using avconv (it is up to you how
-you order the images, but ordering based on filename would be sufficient).
-- Upload the MP4 video to the S3 bucket specified in the request
-(e.g., au.edu.unsw.cs9243.output).
-- It is important to limit the number of requests processed on a machine at one
-time. Media transcoding is a CPU intensive task and processing multiple requests
-on one machine poses a risk of a machine crash. This is why we start the jobs
-via cron and make sure that only one is running at a time. Also, parallelisation
-does not bring much benefit unless a machine has many CPUs or cores. Note that
-if the service instance has more than one core, you may start multiple requests
-so that all cores are utilised, however this is optional and not a requirement
-of the assignment.
-
-Using a work queue to let instances control the degree of parallelisation is a
-common architecture pattern. It is possible to “push” requests to instances but
-there must be a mechanism to avoid pushing too many requests to an instance.
-
-The transcoding processes should also log their progress to a log file
-(called minimoto.log) in the home directory of the service instance.
-The specific log file format is up to you, but it should contain information
-about each run of the transcoding process and provide details such as the
-success or failure of the run, any arguments received, and any other interesting
-output that could help diagnose and fix problems. Note that there should be one
-log file per service instance. All transcoding processes running on the same
-service instance must write (append) to the same log file.
-"""
-
 import os
 import boto3
 import shutil
@@ -49,6 +10,7 @@ from minimoto_constants import *
 RUNNING_FILE_NAME = "MINIMOTO_SERVICE_RUNNING"
 LOCAL_IMAGES_DIR = "images_dir"
 LOCAL_VIDEO_FILE = "video_file.mp4"
+
 
 def main():
     # Log to minimoto.log
@@ -105,12 +67,12 @@ def main():
     output_bucket = s3.Bucket(OUTPUT_BUCKET_NAME)
     output_bucket.upload_file(LOCAL_VIDEO_FILE, s3_dirname + ".mp4")
 
-    # delete images from input bucket
+    # Delete images from input bucket.
     subprocess.run(["aws", "--region", "ap-southeast-2", "s3", "rm",
                     "s3://%s/%s" % (INPUT_BUCKET_NAME, s3_dirname),
                     "--recursive"])
 
-    # Delete processed message from queue
+    # Delete processed message from queue.
     message.delete()
 
     shutil.rmtree(LOCAL_IMAGES_DIR)
