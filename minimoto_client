@@ -13,9 +13,9 @@ RANDOMWORD_LENGTH = 30
 
 
 def randomword():
-    list = random.choice(string.ascii_lowercase + string.ascii_uppercase
-                         for i in range(RANDOMWORD_LENGTH))
-    return "".join(list)
+    return "".join(random.choice(
+        string.ascii_lowercase + string.ascii_uppercase
+        for i in range(RANDOMWORD_LENGTH)))
 
 
 def main():
