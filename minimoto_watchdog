@@ -16,7 +16,8 @@ def start_instances(ec2, keyfile, ami, arn, num_instances):
     instances_started = 0
     while instances_started < num_instances:
         with open("minimoto_service_userdata", "r") as userdatafile:
-            instances = boto3.resource("ec2").create_instances(
+            instances = boto3.resource("ec2", region_name="ap-southeast-2")
+                        .create_instances(
                 ImageId=ami,
                 MinCount=1,
                 MaxCount=1,
