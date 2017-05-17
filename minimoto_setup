@@ -94,6 +94,7 @@ def main():
             role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonEC2FullAccess")
             role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonSQSFullAccess")
             role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/AmazonS3FullAccess")
+            role.attach_policy(PolicyArn="arn:aws:iam::aws:policy/IAMFullAccess")
             ip = iam.create_instance_profile(InstanceProfileName=IAM_PROFILE_NAME)
             ip.add_role(RoleName=role.name)
             arn = ip.arn

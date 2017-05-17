@@ -68,10 +68,10 @@ def get_cpu_util(metric, instance, start, end):
 
 def main():
     print("Getting boto3 resources")
-    sqs = boto3.resource("sqs")
-    ec2 = boto3.client("ec2")
-    iam = boto3.client("iam")
-    cloudwatch = boto3.resource("cloudwatch")
+    sqs = boto3.resource("sqs", region_name="ap-southeast-2")
+    ec2 = boto3.client("ec2", region_name="ap-southeast-2")
+    iam = boto3.client("iam", region_name="ap-southeast-2")
+    cloudwatch = boto3.resource("cloudwatch", region_name="ap-southeast-2")
 
     print("Finding the number of messages in the queue...")
     queue = sqs.get_queue_by_name(QueueName=TRANSCODING_REQUESTS_QUEUE_NAME)
