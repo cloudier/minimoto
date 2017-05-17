@@ -13,11 +13,11 @@ MSG_THRESHOLD = 10
 IDLE_THRESHOLD = 2
 
 def start_instances(ec2, keyfile, ami, arn, num_instances):
-    instances_started = 0
-    while instances_started < num_instances:
+    instances = []
+    while len(instances) < num_instances:
         with open("minimoto_service_userdata", "r") as userdatafile:
             ec2r = boto3.resource("ec2", region_name="ap-southeast-2")
-            instances = ec2r.create_instances(
+            ci_response = ec2r.create_instances(
                 ImageId=ami,
                 MinCount=1,
                 MaxCount=1,
@@ -32,25 +32,12 @@ def start_instances(ec2, keyfile, ami, arn, num_instances):
                               "Value": INSTANCE_TAG_VALUE}]
                 }]
             )
+            instances.append(ci_response[0].id)
 
-        # Wait until instance is set up
-        print("Waiting for instance #{} out of {}"
-              .format(instances_started + 1, num_instances))
-        waiter = ec2.get_waiter("instance_status_ok")
-        waiter.wait(InstanceIds=[instances[0].id])
-
-        # Upload files
-        print("Uploading files for instance #{}".format(instances_started + 1))
-        instances[0].reload()
-        instance_url = instances[0].public_dns_name
-        files = ["minimoto_service", "img2video", "minimoto_constants.py"]
-        for filename in files:
-            print("Uploading " + filename)
-            subprocess.check_call(
-                ["scp", "-o", "StrictHostKeyChecking no", "-i",
-                 keyfile, filename,
-                 "%s@%s:/home/%s/" % (USER, instance_url, USER)])
-        instances_started += 1
+    # Wait until instance is set up
+    print("Waiting for instances to be set up...")
+    waiter = ec2.get_waiter("instance_status_ok")
+    waiter.wait(InstanceIds=instances)
 
 def get_cpu_util(metric, instance, start, end):
     # Get average over last 5 minutes
@@ -137,4 +124,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

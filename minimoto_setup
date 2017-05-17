@@ -6,8 +6,6 @@ long time to run. However, if it takes more than 10 minutes, please note this
 and explain the reasons in your DESIGN doc.
 """
 
-# TODO check failure
-
 import os
 import sys
 import time
@@ -208,9 +206,7 @@ def main():
     print("Setting up EC2 watchdog instance")
     setup_instance(watchdog_instance,
                    ["minimoto_watchdog", "minimoto_constants.py",
-                    os.path.normpath(keyfile),
-                    "minimoto_service", "img2video",
-                    "minimoto_service_userdata"],
+                    os.path.normpath(keyfile)],
                    keyfile)
     watchdog_url = watchdog_instance.public_dns_name
     minimoto_info["watchdog_instance_id"] = watchdog_instance.id

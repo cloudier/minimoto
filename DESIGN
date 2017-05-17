@@ -5,12 +5,44 @@ Group 12
 ===============================================
 Application architecture
 
+The application architecture is client-server, where the 'server' is a
+distributed system made up of multiple servers that are transparent to the
+client. To convert a series of images into a video, the client first uploads
+the images into the input S3 bucket. The images for a particular video must be
+in one directory, and the directory is suffixed with a string of random
+lowercase ASCII characters so that multiple conversion requests with the same
+directory do not interfere with each other. Then, the client adds a message to
+the SQS queue with the name of the directory and the random suffix. The
+conversion is complete when the SQS message has been deleted and the resulting
+video is available in the output S3 bucket.
+
+The application that provides the service is run periodically via cron. If the
+instance it is running on isn't currently converting a video, it will grab a new
+message from the SQS queue and start converting that.
+
+The client, watchdog and service are set up by the setup script. This setup
+script:
+  - Creates a new IAM role and instance profile to provide the new instances
+    access to IAM, EC2, SQS and S3.
+  - Creates an SQS queue.
+  - Creates the input and output S3 buckets.
+  - Creates a security group for the new instances to allow ssh access.
+  - Starts up the client, watchdog and service instances, and uploads files to
+    these instances using scp.
+  - Creates an AMI for the watchdog to use to setup new service instances.
+
+The watchdog...
+
 ===============================================
 Algorithms
 
 -----------------------------------------------
+TODO think this part thru!
+
+-----------------------------------------------
 Transcoding service
 
+TODO
 Client program adds to queue
 Service program 1 takes request from queue which reduces visibility for a time
 Service program 1 crashes
@@ -21,14 +53,68 @@ Service program 3 takes request from queue which reduces visibility for a time <
 Service program 2 finishes and removes request from the queue
 Service program 3 finishes and tries removing request from the queue again
 
+-----------------------------------------------
+Watchdog
+
+
 ===============================================
 Code
 
+-----------------------------------------------
+Language, Libraries and Tools
+
+We wrote our scripts in Python 3 and used the boto3 library.
+
+-----------------------------------------------
+Structure
+
+`minimoto_constants.py`: shared file names and
+`minimoto_default_userdata`: we run this script when starting up the client and
+  watchdog instance. It installs pip3, boto3 and awscli.
+`minimoto_service_userdata`: we run this script whenever we start up a service
+  instance. It installs pip3, boto3, awscli and avconv-related applications, and
+  runs cron.
+`Makefile`: installs pip3, boto3 and awscli, and ensures that img2video and our
+  Python scripts are executable.
+`iam_trust_policy.json`: used to set up new EC2 instances with the correct
+  permissions for accessing IAM, EC2, SQS and S3.
 
 ===============================================
 Testing
 
+-----------------------------------------------
+Basic functionality
+
+We tested the basic functionality of our scripts by manually starting up an EC2
+instance, running the setup script and then ssh-ing into the client, service and
+watchdog instances. Then we ran these scripts and checked the results in AWS to
+test different aspects of their functionality. For example, if we ran the client
+script we would expect the input bucket to contain the uploaded images and the
+SQS queue to contain one message. This was mainly used during development.
+
+-----------------------------------------------
+Large files
+
+TODO
+
+-----------------------------------------------
+Large number of requests
+
+TODO
+
+-----------------------------------------------
+Concurrent requests
+
+TODO
 
 ===============================================
 Shortcomings
 
+-----------------------------------------------
+Security
+
+-----------------------------------------------
+Performance
+
+-----------------------------------------------
+Cost
