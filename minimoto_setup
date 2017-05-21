@@ -10,7 +10,7 @@ import subprocess
 from minimoto_constants import *
 
 
-def start_instance(ec2, keyname, userdata, arn, tagspec):
+def start_instance(ec2, keyname, userdata, arn, instance_type, tagspec):
     while True:
         try:
             with open(userdata, "r") as userdatafile:
@@ -18,7 +18,7 @@ def start_instance(ec2, keyname, userdata, arn, tagspec):
                     ImageId="ami-96666ff5",
                     MinCount=1,
                     MaxCount=1,
-                    InstanceType="t2.small",
+                    InstanceType=instance_type,
                     KeyName=keyname,
                     SecurityGroups=[SECURITY_GROUP_NAME],
                     UserData=userdatafile.read(),
@@ -106,7 +106,7 @@ def main():
     print("Creating SQS queue")
     queue = sqs.create_queue(
         QueueName=TRANSCODING_REQUESTS_QUEUE_NAME,
-        Attributes={"VisibilityTimeout": "30"})
+        Attributes={"VisibilityTimeout": "60"})
     minimoto_info["queue_url"] = queue.url
     write_to_pickle(minimoto_info)
 
@@ -171,11 +171,13 @@ def main():
 
     print("Starting EC2 client instance")
     client_instance = start_instance(ec2, keyname,
-                                     "minimoto_default_userdata", arn, [])
+                                     "minimoto_default_userdata", arn,
+                                     "t2.small", [])
 
     print("Starting EC2 watchdog instance")
     watchdog_instance = start_instance(ec2, keyname,
-                                       "minimoto_default_userdata", arn, [])
+                                       "minimoto_default_userdata", arn,
+                                       "t2.small", [])
 
     print("Starting EC2 service instance")
     ts = [{
@@ -183,7 +185,8 @@ def main():
         "Tags": [{"Key": INSTANCE_TAG_NAME, "Value": INSTANCE_TAG_VALUE}]
         }]
     service_instance = start_instance(ec2, keyname,
-                                      "minimoto_service_userdata", arn, ts)
+                                      "minimoto_service_userdata", arn,
+                                      "m4.large", ts)
 
     print("Waiting until instances OK")
     # This should wait until the init script for all instances has finished

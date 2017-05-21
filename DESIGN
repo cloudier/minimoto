@@ -45,16 +45,19 @@ Algorithms
 -----------------------------------------------
 Transcoding service
 
-TODO
-Client program adds to queue
-Service program 1 takes request from queue which reduces visibility for a time
-Service program 1 crashes
-Request is made visible again in the queue
-Service program 2 takes request from queue which reduces visibility for a time
-Request is made visible again in the queue <-- set the visibility timeout high enough to avoid this
-Service program 3 takes request from queue which reduces visibility for a time <-- because here, 2 service programs are transcoding the same request
-Service program 2 finishes and removes request from the queue
-Service program 3 finishes and tries removing request from the queue again
+The transcoding service follows the algorithm given in the spec.
+While the transcoding service is running, it creates a file called
+MINIMOTO_SERVICE_RUNNING. When the service starts, it checks for the presense of
+this file before continuing.
+We make sure to only delete a message from the SQS queue once a transcoding
+request is complete and the output has been successfully uploaded to the output
+s3 bucket. This means that if transcoding fails for some reason, the message
+will be automatically placed back into the queue by SQS. We set the visibility
+timeout to 60 seconds. This is long enough that a transcoding operation should
+finish in that time, otherwise we risk having two instances working on the same
+request, which is wasteful.
+When the service finishes, we delete the images and the created video from the
+instance as well as the images from the input s3 bucket.
 
 -----------------------------------------------
 Watchdog
@@ -66,9 +69,12 @@ the watchdog prints out the status and CPU utilisation of each instance, as well
 as the average utilisation and the number of messages in the queue. Otherwise,
 the watchdog checks the number of messages in the queue. If there are messages
 but no instances, then the watchdog starts up an instance. If there are
-instances, then the watchdog will only start up another instance if there are
-more than 10 messages in the queue. If there are no messages, then the watchdog
-will kill instances with a CPU utilisation that is lower than 2%.
+instances, then the watchdog will only start up more instances if there are
+more than 5 messages in the queue. The watchdog aims to keep the number of
+instances running equal to the number of pending messages / 5.
+If there are fewer than 5 messages, then the watchdog will kill instances with a
+CPU utilisation that is lower than 10%. The watchdog will only kill instances
+that are less than 10 minutes from the end of their current billing cycle.
 
 ===============================================
 Code
@@ -81,22 +87,20 @@ We wrote our scripts in Python 3 and used the boto3 library.
 -----------------------------------------------
 Structure
 
-`minimoto_constants.py`: shared file names and
+`minimoto_constants.py`: shared names and domains
 `minimoto_default_userdata`: we run this script when starting up the client and
   watchdog instance. It installs pip3, boto3 and awscli.
 `minimoto_service_userdata`: we run this script whenever we start up a service
   instance. It installs pip3, boto3, awscli and avconv-related applications, and
-  runs cron.
+  sets up cron.
 `Makefile`: installs pip3, boto3 and awscli, and ensures that img2video and our
   Python scripts are executable.
 `iam_trust_policy.json`: used to set up new EC2 instances with the correct
   permissions for accessing IAM, EC2, SQS and S3.
+Every other file is as described in the spec
 
 ===============================================
 Testing
-
------------------------------------------------
-Basic functionality
 
 We tested the basic functionality of our scripts by manually starting up an EC2
 instance, running the setup script and then ssh-ing into the client, service and
@@ -105,20 +109,17 @@ test different aspects of their functionality. For example, if we ran the client
 script we would expect the input bucket to contain the uploaded images and the
 SQS queue to contain one message. This was mainly used during development.
 
------------------------------------------------
-Large files
+We tested a large single transcoding job by uploading 60 images of various
+sizes. An m4.large instance was sufficient to complete the transcoding in less
+than a minute. We tried a larger number of images, 100, but the transcoding
+always failed in the convert -morph step due to low memory.
 
-TODO
-
------------------------------------------------
-Large number of requests
-
-TODO
-
------------------------------------------------
-Concurrent requests
-
-TODO
+We also tested a large number of concurrent requests by creating 20 transcoding
+requests at once. While they were pending, we ran the watchdog to test the
+scaling functionality. Once it had spun up more instances we tested the watchdog
+status reporting functionality. While the requests were still being serviced, we
+ran the watchdog again to make sure it didn't scale up any more. Once all the
+transcoding was complete we ran the watchdog to make sure it scaled down.
 
 ===============================================
 Shortcomings
@@ -140,18 +141,26 @@ it starts up, but we thought that this would be inconvenient for the marker.
 Ideally, we would also protect sudo privileges on our EC2 instances with some
 sort of password. We believe that in this assignment, the inconvenience of this
 would outweigh the security benefit, given that no sensitive information is
-stored on the instances.
+stored on the instances and the instances don't stay up for very long.
 
 -----------------------------------------------
 Performance
 
 We could improve the performance of our service by checking if there are
 multiple cores on the instance the service is running on and then ensuring that
-there is one conversion process for each core.
+there is one transcoding process for each core.
 
 -----------------------------------------------
 Cost
 
-Our watchdog does not take into account billing cycles when starting and
-stopping new instances. By leaving instances up until the end of an hour, we can
-gain more instance usage without increasing our costs.
+We leave idle instances running if they have only been running for part of an
+hour, since AWS bills running instances per hour. We might be able to cut more
+costs if we stop (not terminate) idle instances instead.
+
+-----------------------------------------------
+DoS
+
+When processing a large number of images, the transcoding process can crash and
+will be restarted. A malicious user could create many requests with large
+numbers of images that would consistently fail and be restarted. This could be
+fixed by limiting the size/number of images allowed in each request.

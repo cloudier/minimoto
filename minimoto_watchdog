@@ -9,8 +9,8 @@ import subprocess
 
 from minimoto_constants import *
 
-MSG_THRESHOLD = 10
-IDLE_THRESHOLD = 2
+MSG_THRESHOLD = 5
+IDLE_THRESHOLD = 10
 
 
 def start_instances(ec2, keyfile, ami, arn, num_instances):
@@ -21,7 +21,7 @@ def start_instances(ec2, keyfile, ami, arn, num_instances):
             ImageId=ami,
             MinCount=1,
             MaxCount=1,
-            InstanceType="t2.small",
+            InstanceType="m4.large",
             KeyName=keyfile[:-4],
             SecurityGroups=[SECURITY_GROUP_NAME],
             IamInstanceProfile={"Arn": arn},
@@ -50,6 +50,8 @@ def get_cpu_util(metric, instance, start, end):
         Statistics=["Average"])
     sorted_points = sorted(metric_response["Datapoints"],
                            key=operator.itemgetter("Timestamp"))
+    if len(sorted_points) == 0:
+        return 0
     last_point = sorted_points[-1]
     return last_point["Average"]
 
@@ -99,18 +101,22 @@ def main():
         print("There are {} messages in the queue".format(messages_in_queue))
         if messages_in_queue > MSG_THRESHOLD or (
                 messages_in_queue > 0 and len(service_instances) == 0):
-            instances_to_start = max(messages_in_queue // MSG_THRESHOLD, 1)
+            instances_to_start = (messages_in_queue // MSG_THRESHOLD
+                - len(service_instances))
+            if instances_to_start <= 0:
+                print("Not starting any new instances")
+                return
             keyfile = glob.glob("*.pem")[0]
             arn = iam.get_instance_profile(
                 InstanceProfileName=IAM_PROFILE_NAME)["InstanceProfile"]["Arn"]
             dim_response = ec2.describe_images(
                 Filters=[{"Name": "name",
-                         "Values": [SERVICE_AMI_NAME]}])
+                          "Values": [SERVICE_AMI_NAME]}])
             ami = dim_response["Images"][0]["ImageId"]
             print("Starting {} instance(s)".format(instances_to_start))
             start_instances(ec2, keyfile, ami, arn, instances_to_start)
-        elif messages_in_queue == 0:
-            print("Queue is empty, checking for idle instances...")
+        elif messages_in_queue < MSG_THRESHOLD:
+            print("Queue is almost empty, checking for idle instances...")
             metric = cloudwatch.Metric("AWS/EC2", "CPUUtilization")
             now = datetime.datetime.utcnow()
             start = now - datetime.timedelta(minutes=10)
@@ -120,12 +126,13 @@ def main():
                     metric, instance, start, end)
                 instance_ut = datetime.datetime.now(datetime.timezone.utc) - instance["LaunchTime"]
                 instance_ut_mins = instance_ut.total_seconds() / 60
-                if (instance_ut_mins % 60) > 50:
+                iid = instance["InstanceId"]
+                if (instance_ut_mins % 60) < 50:
                     # Ignore instance if we are not near the end of a billing
                     # cycle
+                    print("Not killing instance {}, too far from end of billing cycle".format(iid))
                     continue
                 if instance_utilisation < IDLE_THRESHOLD:
-                    iid = instance["InstanceId"]
                     print("Killing instance {}".format(iid))
                     ec2.terminate_instances(InstanceIds=[iid])
 
