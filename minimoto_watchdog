@@ -118,6 +118,12 @@ def main():
             for instance in service_instances:
                 instance_utilisation = get_cpu_util(
                     metric, instance, start, end)
+                instance_ut = datetime.datetime.now() - instance["LaunchTime"]
+                instance_ut_mins = instance_ut.total_seconds() / 60
+                if (instance_ut_mins % 60) > 10:
+                    # Ignore instance if we are not near the end of a billing
+                    # cycle
+                    continue
                 if instance_utilisation < IDLE_THRESHOLD:
                     iid = instance["InstanceId"]
                     print("Killing instance {}".format(iid))
